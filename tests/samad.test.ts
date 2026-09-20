@@ -149,8 +149,8 @@ describe('SamadApiGateway', () => {
     request.mockResolvedValueOnce({
       payload: {
         selfWeekPrograms: [
-          [{ programId: 1, selfId: 5, daysDifferenceWithToday: 2, date: '2026-09-22T00:00:00Z', programFoodTypes: [{ foodTypeId: 10, foodNames: 'چلوکباب', price: 120_000 }] }],
-          [{ programId: 2, selfId: 5, daysDifferenceWithToday: 3, date: '2026-09-23T00:00:00Z', programFoodTypes: [{ foodTypeId: 11, foodNames: 'قیمه', price: 90_000 }] }],
+          [{ programId: 1, selfId: 5, daysDifferenceWithToday: 3, date: '2026-09-22T00:00:00Z', programFoodTypes: [{ foodTypeId: 10, foodNames: 'چلوکباب', price: 120_000 }] }],
+          [{ programId: 2, selfId: 5, daysDifferenceWithToday: 4, date: '2026-09-23T00:00:00Z', programFoodTypes: [{ foodTypeId: 11, foodNames: 'قیمه', price: 90_000 }] }],
         ],
         userWeekReserves: [],
       },
@@ -167,8 +167,8 @@ describe('SamadApiGateway', () => {
       payload: {
         selfWeekPrograms: [
           [
-            { programId: 1, selfId: 5, daysDifferenceWithToday: 1, date: '2026-09-21T00:00:00Z', programFoodTypes: [{ foodTypeId: 10, foodNames: 'زود', price: 1 }] },
-            { programId: 2, selfId: 5, daysDifferenceWithToday: 2, date: '2026-09-22T00:00:00Z', programFoodTypes: [{ foodTypeId: 11, foodNames: 'دیر', price: 1 }] },
+            { programId: 1, selfId: 5, daysDifferenceWithToday: 2, date: '2026-09-21T00:00:00Z', programFoodTypes: [{ foodTypeId: 10, foodNames: 'زود', price: 1 }] },
+            { programId: 2, selfId: 5, daysDifferenceWithToday: 3, date: '2026-09-22T00:00:00Z', programFoodTypes: [{ foodTypeId: 11, foodNames: 'دیر', price: 1 }] },
           ],
         ],
         userWeekReserves: [],
@@ -177,6 +177,8 @@ describe('SamadApiGateway', () => {
 
     const meals = await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5 });
 
+    // The boundary is inclusive: exactly RESERVABLE_DAYS_AHEAD is bookable, one
+    // day closer is not.
     expect(meals.map(meal => meal.foodName)).toEqual(['دیر']);
   });
 

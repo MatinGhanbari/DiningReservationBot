@@ -10,9 +10,7 @@ export const WEEK = 7 * DAY;
  * Samad locks reservations closer to the meal, and its own rule is expressed in
  * days, so the filter is kept in the same unit rather than converted to ms.
  *
- * The value is 2 because that is what the original `DAYS_LIMIT` constant was:
- * Samad rejects anything closer than two days out, so offering those meals would
- * only produce a refusal the student cannot act on. It is overridable through
- * `RESERVABLE_DAYS_AHEAD`, because universities do not all share one window.
+ * Overridable through `RESERVABLE_DAYS_AHEAD`, because universities do not all
+ * share one window.
  */
-export const RESERVABLE_DAYS_AHEAD = 2;
+export const RESERVABLE_DAYS_AHEAD = 3;

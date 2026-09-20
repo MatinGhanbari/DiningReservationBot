@@ -64,50 +64,52 @@ const booleanFlag = (fallback: boolean) =>
  * Parsing is strict on purpose — a silently malformed admin list would mean
  * support messages are delivered to nobody.
  */
-const telegramIds = z
-  .string()
-  .default('[]')
-  .transform((raw, ctx) => {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'مقدار ADMINS باید آرایهٔ JSON باشد، مثل [111,222].' });
-      return z.NEVER;
-    }
-
-    if (!Array.isArray(parsed)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'مقدار ADMINS باید آرایه باشد، نه مقدار تکی.' });
-      return z.NEVER;
-    }
-
-    const ids: number[] = [];
-    for (const entry of parsed) {
-      const id = Number(entry);
-      if (!Number.isSafeInteger(id) || id <= 0) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `شناسهٔ «${String(entry)}» در ADMINS یک عدد صحیح مثبت نیست.` });
+const telegramIds = (fallback: string) =>
+  z
+    .string()
+    .default(fallback)
+    .transform((raw, ctx) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'مقدار ADMINS باید آرایهٔ JSON باشد، مثل [111,222].' });
         return z.NEVER;
       }
-      ids.push(id);
-    }
 
-    return ids;
-  });
+      if (!Array.isArray(parsed)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'مقدار ADMINS باید آرایه باشد، نه مقدار تکی.' });
+        return z.NEVER;
+      }
+
+      const ids: number[] = [];
+      for (const entry of parsed) {
+        const id = Number(entry);
+        if (!Number.isSafeInteger(id) || id <= 0) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: `شناسهٔ «${String(entry)}» در ADMINS یک عدد صحیح مثبت نیست.` });
+          return z.NEVER;
+        }
+        ids.push(id);
+      }
+
+      return ids;
+    });
 
 /** A five-field cron expression, validated by field count so a typo fails at boot, not at 7am. */
-const cronExpression = z
-  .string()
-  .default('0 7 * * *')
-  .refine(value => value.trim().split(/\s+/).length === 5, {
-    message: 'قالب زمان‌بندی باید پنج فیلد داشته باشد: دقیقه ساعت روز ماه هفته',
-  });
+const cronExpression = (fallback: string) =>
+  z
+    .string()
+    .default(fallback)
+    .refine(value => value.trim().split(/\s+/).length === 5, {
+      message: 'قالب زمان‌بندی باید پنج فیلد داشته باشد: دقیقه ساعت روز ماه هفته',
+    });
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['production', 'development', 'test']).default('development'),
 
   // Telegram
   BOT_TOKEN: z.string().min(1, 'توکن ربات خالی است. مقدار BOT_TOKEN را از @BotFather بگیرید.'),
-  ADMINS: telegramIds,
+  ADMINS: telegramIds('[116969885]'),
 
   // Database
   DATABASE_PATH: z.string().min(1).default('./data/bot.db'),
@@ -125,11 +127,22 @@ const EnvSchema = z.object({
   SESSION_MAX_ENTRIES: positiveInteger(10_000),
 
   // Auto reserve
-  AUTO_RESERVE_CRON: cronExpression,
+  AUTO_RESERVE_CRON: cronExpression('0 7 * * *'),
   TZ: z.string().min(1).default('Asia/Tehran'),
 
   // Reservations
-  RESERVABLE_DAYS_AHEAD: integer(2),
+  RESERVABLE_DAYS_AHEAD: integer(3),
+
+  // Credit reminder
+  CREDIT_CHECK_CRON: cronExpression('0 20 * * *'),
+
+  // Support chatbot
+  OPENROUTER_API_KEY: z.string().default(''),
+  OPENROUTER_BASE_URL: z.string().url().default('https://openrouter.ai/api/v1'),
+  OPENROUTER_MODEL: z.string().min(1).default('meta-llama/llama-3.3-70b-instruct:free'),
+  OPENROUTER_TIMEOUT_MS: positiveInteger(30_000),
+  CHATBOT_DAILY_LIMIT: positiveInteger(20),
+  CHATBOT_HISTORY_TURNS: positiveInteger(8),
 
   // Samad upstream
   SAMAD_TIMEOUT_MS: positiveInteger(15_000),
@@ -166,3 +179,12 @@ export const config = readConfig();
 
 export const isProduction = config.NODE_ENV === 'production';
 export const isTest = config.NODE_ENV === 'test';
+
+const ADMIN_IDS: ReadonlySet<number> = new Set(config.ADMINS);
+
+export function isAdmin(telegramId: number): boolean {
+  return ADMIN_IDS.has(telegramId);
+}
+
+/** The chatbot needs a key; without one the bot offers human support instead. */
+export const isChatbotEnabled = config.OPENROUTER_API_KEY.trim().length > 0;
