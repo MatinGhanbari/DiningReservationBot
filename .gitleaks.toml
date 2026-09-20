@@ -1,0 +1,29 @@
+title = "gitleaks configuration"
+
+#
+# The example environment file has to show the *shape* of a Telegram token and an
+# admin id, otherwise nobody can tell what to put there. Those are declared here
+# so the scanner only reports credentials that are not obviously placeholders.
+#
+[extend]
+useDefault = true
+
+[[allowlist]]
+description = "Placeholder credentials in the example environment file"
+paths = ['''^\.env\.example$''']
+
+[[allowlist]]
+description = "Fake tokens used by the test suite and the copy module"
+paths = ['''^tests/.*$''', '''^src/copy/fa\.ts$''']
+
+[[allowlist]]
+regexes = [
+  # The shape of a Telegram bot token, used as documentation.
+  '''123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA''',
+  # A deliberately obvious placeholder.
+  '''change-me-to-a-long-random-secret-at-least-32-chars''',
+  '''a-test-key-that-is-definitely-long-enough''',
+  # Samad credentials never appear in the repository; this guards against a
+  # future test fixture that looks like one.
+  '''v1:iv:tag:cipher''',
+]

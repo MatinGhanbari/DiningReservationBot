@@ -1,0 +1,46 @@
+#
+# Weekly dependency updates, grouped so a pull request is reviewable, and capped
+# so a Monday morning does not bring fifteen of them.
+#
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:17'
+    open-pull-requests-limit: 5
+    # Production dependencies can change behaviour, so they arrive as their own
+    # pull request; tooling changes are bundled because they cannot ship.
+    groups:
+      runtime:
+        dependency-type: production
+        applies-to: version-updates
+      tooling:
+        dependency-type: development
+        applies-to: version-updates
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:17'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(ci)'
+
+  - package-ecosystem: docker
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:17'
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: 'chore(docker)'
