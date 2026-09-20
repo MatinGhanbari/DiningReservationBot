@@ -212,7 +212,7 @@ export class SamadApiGateway implements SamadGateway {
   async listReserves(query: ReservesQuery): Promise<WeeklyReserves> {
     const response = await this.http.request<SamadReservesResponse>({
       universityId: query.universityId,
-      path: '/rest/reservations/reserves',
+      path: '/rest/reserves',
       method: 'GET',
       accessToken: query.accessToken,
       query: {
@@ -267,7 +267,7 @@ export class SamadApiGateway implements SamadGateway {
   async reserve(input: ReserveInput): Promise<ReservationOutcome> {
     const response = await this.http.request<SamadReserveResponse>({
       universityId: input.universityId,
-      path: `/rest/reservations/reserves/${input.programId}/reserve`,
+      path: `/rest/reserves/${input.programId}/reserve`,
       method: 'PUT',
       accessToken: input.accessToken,
       jsonBody: {

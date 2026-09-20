@@ -128,7 +128,7 @@ describe('SamadHttpClient', () => {
     await expect(
       createClient().request({
         universityId: 8,
-        path: '/rest/reservations/reserves/1/reserve',
+        path: '/rest/reserves/1/reserve',
         method: 'PUT',
         accessToken: 'x',
         jsonBody: {},
