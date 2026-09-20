@@ -192,7 +192,7 @@ jobs:
       # Building without pushing warms the cache for the publish job and proves
       # the image compiles on a clean machine, which a local build cannot.
       - name: Build the image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
@@ -250,7 +250,7 @@ jobs:
             type=sha,prefix=,format=long
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
