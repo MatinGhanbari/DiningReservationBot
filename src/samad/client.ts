@@ -1,4 +1,5 @@
 import type { Logger } from 'pino';
+import { Agent, type Dispatcher } from 'undici';
 import { findUniversityById } from '../domain/universities';
 import { isTransientNetworkError, retry } from '../shared/async';
 import { readTextWithLimit, redactUrl } from '../shared/http';
@@ -10,6 +11,12 @@ export interface SamadHttpClientOptions {
   /** Additional attempts after the first one, for requests that are safe to repeat. */
   maxRetries: number;
   logger: Logger;
+  /**
+   * Verify Samad's TLS certificate chain. True by default. Set false only when
+   * Samad's host serves an incomplete chain that Node refuses but browsers
+   * tolerate — this disables chain validation for Samad traffic.
+   */
+  verifyTls: boolean;
 }
 
 export interface SamadRequest {
@@ -60,6 +67,25 @@ function extractUpstreamMessage(payload: unknown): string | null {
  */
 export class SamadHttpClient {
   constructor(private readonly options: SamadHttpClientOptions) {}
+
+  /**
+   * Built once, only when TLS verification is disabled. An undici dispatcher with
+   * `rejectUnauthorized: false` relaxes the cert chain check that Node enforces
+   * but browsers work around automatically.
+   */
+  private insecureDispatcher: Dispatcher | null = null;
+
+  private get dispatcher(): Dispatcher | undefined {
+    if (this.options.verifyTls) {
+      return undefined;
+    }
+
+    if (this.insecureDispatcher === null) {
+      this.insecureDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+    }
+
+    return this.insecureDispatcher;
+  }
 
   async request<T>(request: SamadRequest): Promise<T> {
     const university = findUniversityById(request.universityId);
@@ -126,6 +152,9 @@ export class SamadHttpClient {
         // Samad's API does not redirect, so a redirect is an error, not a
         // navigation to follow.
         redirect: 'manual',
+        // Only set when verification is disabled; otherwise undefined, which
+        // leaves the default secure dispatcher in place.
+        dispatcher: this.dispatcher,
       });
     } catch (error) {
       throw new UpstreamUnavailableError({

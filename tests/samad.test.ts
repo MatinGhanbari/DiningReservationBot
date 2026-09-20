@@ -13,7 +13,7 @@ const silentLogger = {
 } as never;
 
 function createClient(maxRetries = 2): SamadHttpClient {
-  return new SamadHttpClient({ timeoutMs: 1_000, maxRetries, logger: silentLogger });
+  return new SamadHttpClient({ timeoutMs: 1_000, maxRetries, logger: silentLogger, verifyTls: true });
 }
 
 function jsonResponse(body: unknown, status = 200): Response {

@@ -78,6 +78,7 @@ export function createContainer(): Container {
     timeoutMs: config.SAMAD_TIMEOUT_MS,
     maxRetries: config.SAMAD_MAX_RETRIES,
     logger: scopedLogger('samad'),
+    verifyTls: config.SAMAD_TLS_VERIFY,
   });
   const gateway = new SamadApiGateway(samadHttp, config.RESERVABLE_DAYS_AHEAD);
 
