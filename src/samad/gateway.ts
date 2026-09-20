@@ -139,7 +139,7 @@ export class SamadApiGateway implements SamadGateway {
   async listMealOptions(query: ProgramQuery): Promise<readonly MealOption[]> {
     const response = await this.http.request<SamadProgramsResponse>({
       universityId: query.universityId,
-      path: '/rest/reservations/programs',
+      path: '/rest/reservations/programs/v2',
       method: 'GET',
       accessToken: query.accessToken,
       query: {
