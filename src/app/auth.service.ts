@@ -49,6 +49,7 @@ export class AuthService {
       autoReserveEnabled: existing?.autoReserveEnabled ?? false,
       autoReserveSelfId: existing?.autoReserveSelfId ?? null,
       autoReserveWeekdays: existing?.autoReserveWeekdays ?? [],
+      creditReminderSentOn: existing?.creditReminderSentOn ?? null,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };

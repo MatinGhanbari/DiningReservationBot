@@ -395,13 +395,309 @@ export const copy = {
     ),
 
   support: {
-    prompt: (): string =>
+    menuIntro: (hasChatbot: boolean): string =>
       blocks(
-        '📮 پیامت رو بنویس و بفرست.',
-        'مستقیم می‌رسه دست ما و در اولین فرصت جواب می‌دیم.',
+        '📮 <b>پشتیبانی</b>',
+        'چطور می‌تونم کمکت کنم؟',
+        hasChatbot
+          ? bullet([
+              '<b>پرسیدن از دستیار:</b> سؤال‌هات دربارهٔ کار کردن ربات رو همون لحظه جواب می‌ده.',
+              '<b>پیام به پشتیبانی:</b> پیامت می‌ره برای اپراتور انسانی و در اولین فرصت جواب می‌گیری.',
+            ])
+          : 'پیامت رو بنویس و بفرست؛ می‌ره برای اپراتور انسانی و در اولین فرصت جواب می‌گیری.',
       ),
 
-    sent: (): string => blocks('✅ پیامت رسید.', 'ممنون که وقت گذاشتی. زودی بررسی می‌کنم.'),
+    chatbotIntro: (remaining: number): string =>
+      blocks(
+        '🤖 <b>دستیار ربات</b>',
+        'هر چیزی که دربارهٔ کار کردن همین ربات می‌خوای بپرس. سؤال‌های بیربط رو جواب نمی‌دم.',
+        `امروز ${toPersianDigits(remaining)} پیام دیگه می‌تونی بپرسی.`,
+      ),
+
+    chatbotThinking: (): string => '🤔 دارم فکر می‌کنم…',
+
+    chatbotAnswer: (answer: string, remaining: number): string =>
+      blocks(
+        escapeHtml(answer),
+        remaining <= 5 ? `📌 ${toPersianDigits(remaining)} پیام از سهمیهٔ امروزت مونده.` : null,
+      ),
+
+    chatbotUnavailable: (): string =>
+      'چت‌بات الان فعال نیست. می‌تونی از گزینهٔ «پیام به پشتیبانی» استفاده کنی تا اپراتور جوابت رو بده.',
+
+    humanIntro: (): string =>
+      blocks(
+        '✍️ پیامت رو بنویس و بفرست.',
+        'مستقیم می‌رسه دست اپراتور و در اولین فرصت جواب می‌گیری.',
+        'می‌تونی عکس یا فایل هم بفرستی.',
+      ),
+
+    humanSent: (ticketId: number): string =>
+      blocks(
+        '✅ <b>پیامت رسید.</b>',
+        `شمارهٔ پیامت: <code>${toPersianDigits(ticketId)}</code>`,
+        'زودی جواب می‌گیری. ممنون که صبر می‌کنی. 🙏',
+      ),
+
+    /** Sent to the admin who owns the ticket, before the user's own message. */
+    adminHeader: (input: {
+      ticketId: number;
+      displayName: string;
+      username: string | null;
+      telegramId: number;
+      messageCount: number;
+      isNew: boolean;
+    }): string =>
+      blocks(
+        `📮 <b>پیام پشتیبانی #${toPersianDigits(input.ticketId)}</b>${input.isNew ? ' (جدید)' : ''}`,
+        bullet([
+          `از: <b>${escapeHtml(input.displayName)}</b>`,
+          input.username === null ? null : `نام کاربری: @${escapeHtml(input.username)}`,
+          `شناسه: <code>${toPersianDigits(input.telegramId)}</code>`,
+          `تعداد پیام‌ها: ${toPersianDigits(input.messageCount)}`,
+        ].filter((line): line is string => line !== null)),
+        '↩️ روی همین پیام ریپلای کن تا جوابت مستقیم بره برای کاربر.',
+      ),
+
+    /** Used when the original message could not be forwarded. */
+    adminBody: (content: string): string => blocks('<b>متن پیام:</b>', escapeHtml(content)),
+
+    adminReply: (text: string): string => blocks('📮 <b>پاسخ پشتیبانی</b>', escapeHtml(text)),
+
+    adminReplyDelivered: (ticketId: number): string =>
+      `✅ جوابت فرستاده شد. (تیکت #${toPersianDigits(ticketId)})`,
+
+    adminReplyUnknown: (): string =>
+      blocks(
+        'این پیام به هیچ تیکتی وصل نیست.',
+        'روی پیام‌هایی که خود ربات برایت فرستاده ریپلای کن، نه روی پیام‌های قدیمی.',
+      ),
+
+    adminReplyFailed: (): string =>
+      'کاربر ربات رو بلاک کرده یا حسابش رو پاک کرده، پس پیام نرسید.',
+
+    ticketClosed: (ticketId: number): string => `✅ تیکت #${toPersianDigits(ticketId)} بسته شد.`,
+
+    ticketAlreadyClosed: (ticketId: number): string => `تیکت #${toPersianDigits(ticketId)} از قبل بسته بود.`,
+
+    closedNotice: (): string =>
+      blocks('🔒 <b>این گفت‌وگو بسته شده.</b>', 'اگه سؤال جدیدی داری، یه پیام تازه بفرست.'),
+  },
+
+  // ── یادآوری اعتبار ────────────────────────────────────────────────────────
+
+  credit: {
+    /**
+     * Sent the evening before the reservation window opens.
+     *
+     * The point is to leave the user enough time to top up, so it names the
+     * shortfall explicitly rather than saying "your balance is low".
+     */
+    reminder: (input: {
+      creditRial: number;
+      requiredRial: number;
+      shortfallRial: number;
+      meals: readonly string[];
+    }): string =>
+      blocks(
+        '⚠️ <b>موجودی حسابت کافی نیست</b>',
+        `برای رزرو وعده‌های پیش‌رو <b>${formatToman(input.requiredRial)}</b> لازم داری، ولی موجودی حسابت <b>${formatToman(input.creditRial)}</b>ه.`,
+        blocks('<b>وعده‌های پیش‌رو</b>', bullet(input.meals)),
+        `کمبود: <b>${formatToman(input.shortfallRial)}</b>`,
+        'اگه حساب رو شارژ نکنی، رزرو خودکار برای این وعده‌ها انجام نمی‌شه. می‌تونی از سامانهٔ سماد یا امور دانشجویی حسابت رو شارژ کنی.',
+      ),
+
+    mealLine: (input: { weekday: string; dateLabel: string; foodName: string; priceRial: number }): string =>
+      `${escapeHtml(input.weekday)} ${escapeHtml(input.dateLabel)} · ${escapeHtml(input.foodName)} · ${formatToman(input.priceRial)}`,
+
+    ok: (): string =>
+      '✅ موجودی حسابت برای رزرو وعده‌های پیش‌رو کافیه. چیزی لازم نیست انجام بدی.',
+  },
+
+  // ── پنل مدیریت ────────────────────────────────────────────────────────────
+
+  admin: {
+    panelTitle: (): string => '🛠️ <b>پنل مدیریت</b>',
+
+    home: (input: { stats: readonly string[]; alerts: readonly string[] }): string =>
+      blocks(
+        '🛠️ <b>پنل مدیریت</b>',
+        bullet(input.stats),
+        input.alerts.length === 0 ? null : blocks('<b>هشدارها</b>', bullet(input.alerts)),
+        'از منوی پایین یکی از بخش‌ها رو انتخاب کن.',
+      ),
+
+    statsReport: (input: { lines: readonly string[]; updatedAt: string }): string =>
+      blocks('📊 <b>آمار کلی</b>', bullet(input.lines), `🕒 آخرین به‌روزرسانی: ${escapeHtml(input.updatedAt)}`),
+
+    usersReport: (input: { total: number; activeToday: number; withAutoReserve: number; rows: readonly string[] }): string =>
+      blocks(
+        '👥 <b>کاربران</b>',
+        bullet([
+          `کل کاربران: <b>${toPersianDigits(input.total)}</b>`,
+          `عضو‌شده در ۲۴ ساعت گذشته: ${toPersianDigits(input.activeToday)}`,
+          `با رزرو خودکار فعال: ${toPersianDigits(input.withAutoReserve)}`,
+        ]),
+        input.rows.length === 0 ? 'هنوز کاربری ثبت نشده.' : blocks('<b>آخرین کاربران</b>', input.rows.join('\n')),
+      ),
+
+    userRow: (input: { telegramId: number; displayName: string; universityName: string; autoReserve: boolean }): string =>
+      `• <code>${toPersianDigits(input.telegramId)}</code> · ${escapeHtml(input.displayName)} · ${escapeHtml(input.universityName)}${input.autoReserve ? ' · ⚙️' : ''}`,
+
+    userDetail: (input: {
+      telegramId: number;
+      displayName: string;
+      universityName: string;
+      samadUsername: string;
+      autoReserve: string;
+      createdAt: string;
+      updatedAt: string;
+    }): string =>
+      blocks(
+        '👤 <b>کاربر</b>',
+        bullet([
+          `نام: <b>${escapeHtml(input.displayName)}</b>`,
+          `شناسهٔ تلگرام: <code>${toPersianDigits(input.telegramId)}</code>`,
+          `دانشگاه: ${escapeHtml(input.universityName)}`,
+          `نام کاربری سماد: <code>${escapeHtml(input.samadUsername)}</code>`,
+          `رزرو خودکار: ${escapeHtml(input.autoReserve)}`,
+          `عضویت: ${escapeHtml(input.createdAt)}`,
+          `آخرین تغییر: ${escapeHtml(input.updatedAt)}`,
+        ]),
+      ),
+
+    userSearchPrompt: (): string =>
+      blocks(
+        '🔍 <b>جست‌وجوی کاربر</b>',
+        'شناسهٔ عددی تلگرام یا نام کاربری سماد رو بفرست.',
+        'برای لغو، از منوی پایین «‹ برگشت به پنل» رو بزن.',
+      ),
+
+    userNotFound: (query: string): string =>
+      blocks(`کاربری با «<code>${escapeHtml(query)}</code>» پیدا نشد.`, 'شناسه یا نام کاربری رو دوباره چک کن.'),
+
+    logoutConfirm: (displayName: string): string =>
+      blocks(
+        `مطمئنی می‌خوای حساب <b>${escapeHtml(displayName)}</b> رو از ربات جدا کنی؟`,
+        'با این کار اطلاعات ورود و نشستش پاک می‌شه و باید از اول وارد بشه.',
+      ),
+
+    logoutDone: (displayName: string): string => `✅ حساب <b>${escapeHtml(displayName)}</b> از ربات جدا شد.`,
+
+    supportReport: (input: { open: number; closed: number; today: number; rows: readonly string[] }): string =>
+      blocks(
+        '📮 <b>تیکت‌های پشتیبانی</b>',
+        bullet([
+          `باز: <b>${toPersianDigits(input.open)}</b>`,
+          `بسته‌شده: ${toPersianDigits(input.closed)}`,
+          `پیام‌های امروز: ${toPersianDigits(input.today)}`,
+        ]),
+        input.rows.length === 0 ? 'تیکت بازی وجود نداره. 🎉' : blocks('<b>تیکت‌های باز</b>', input.rows.join('\n\n')),
+      ),
+
+    ticketRow: (input: {
+      ticketId: number;
+      displayName: string;
+      telegramId: number;
+      messageCount: number;
+      lastMessage: string;
+      updatedAt: string;
+    }): string =>
+      blocks(
+        `<b>#${toPersianDigits(input.ticketId)}</b> · ${escapeHtml(input.displayName)} · <code>${toPersianDigits(input.telegramId)}</code>`,
+        `${toPersianDigits(input.messageCount)} پیام · آخرین: ${escapeHtml(input.updatedAt)}`,
+        `<i>${escapeHtml(truncateUtf8(input.lastMessage, 120))}</i>`,
+      ),
+
+    chatbotReport: (input: {
+      today: number;
+      week: number;
+      usersToday: number;
+      model: string;
+      enabled: boolean;
+      questions: readonly string[];
+    }): string =>
+      blocks(
+        '🤖 <b>گزارش چت‌بات</b>',
+        input.enabled ? null : '⚠️ چت‌بات فعال نیست چون کلید OpenRouter تنظیم نشده.',
+        bullet([
+          `پیام‌های امروز: <b>${toPersianDigits(input.today)}</b>`,
+          `کاربران امروز: ${toPersianDigits(input.usersToday)}`,
+          `پیام‌های ۷ روز گذشته: ${toPersianDigits(input.week)}`,
+          `مدل: <code>${escapeHtml(input.model)}</code>`,
+        ]),
+        input.questions.length === 0
+          ? 'امروز کسی از چت‌بات چیزی نپرسیده.'
+          : blocks('<b>آخرین سؤال‌ها</b>', input.questions.map(question => `• ${escapeHtml(question)}`).join('\n')),
+      ),
+
+    broadcastPrompt: (audience: number): string =>
+      blocks(
+        '📣 <b>پیام همگانی</b>',
+        `متن پیام رو بنویس. این پیام برای <b>${toPersianDigits(audience)}</b> نفر فرستاده می‌شه.`,
+        'می‌تونی از HTML ساده استفاده کنی: <code>&lt;b&gt;</code>، <code>&lt;i&gt;</code>، <code>&lt;code&gt;</code>.',
+      ),
+
+    broadcastConfirm: (audience: number, preview: string): string =>
+      blocks(
+        '📣 <b>پیش‌نمایش پیام همگانی</b>',
+        `<i>${escapeHtml(truncateUtf8(preview, 400))}</i>`,
+        `این پیام برای <b>${toPersianDigits(audience)}</b> نفر فرستاده می‌شه. مطمئنی؟`,
+      ),
+
+    broadcastRunning: (): string => '⏳ دارم می‌فرستم… ممکنه چند دقیقه طول بکشه.',
+
+    broadcastDone: (input: { sent: number; failed: number }): string =>
+      blocks(
+        '📣 <b>پیام همگانی تموم شد.</b>',
+        bullet([
+          `موفق: <b>${toPersianDigits(input.sent)}</b>`,
+          input.failed > 0 ? `ناموفق: ${toPersianDigits(input.failed)}` : null,
+        ].filter((line): line is string => line !== null)),
+        input.failed > 0
+          ? 'ناموفق‌ها معمولاً کسانی‌اند که ربات رو بلاک کردن یا حسابشون رو پاک کردن.'
+          : null,
+      ),
+
+    systemReport: (input: { lines: readonly string[] }): string => blocks('🖥️ <b>وضعیت سیستم</b>', bullet(input.lines)),
+
+    maintenanceReport: (input: { lines: readonly string[] }): string =>
+      blocks('🧹 <b>نگهداری</b>', bullet(input.lines)),
+
+    maintenanceIntro: (): string =>
+      blocks(
+        '🧹 <b>نگهداری</b>',
+        'کارهای زیر بی‌خطرن و فقط داده‌های بی‌مصرف رو پاک می‌کنن. از منوی پایین انتخاب کن.',
+      ),
+
+    purgeDone: (codes: number, sessions: number, conversations: number, chatbot: number): string =>
+      blocks(
+        '🧹 <b>پاک‌سازی انجام شد.</b>',
+        bullet([
+          `کد فراموشی منقضی: ${toPersianDigits(codes)}`,
+          `نشست بی‌استفاده: ${toPersianDigits(sessions)}`,
+          `وضعیت گفتگوی بی‌استفاده: ${toPersianDigits(conversations)}`,
+          `پیام چت‌بات قدیمی: ${toPersianDigits(chatbot)}`,
+        ]),
+      ),
+
+    backupIntro: (): string =>
+      blocks(
+        '💾 <b>پشتیبان‌گیری</b>',
+        'یک نسخهٔ سازگار از دیتابیس می‌سازم و برات می‌فرستم.',
+        'چون فایل ممکنه بزرگ باشه، فرستادنش چند لحظه طول می‌کشه.',
+      ),
+
+    backupCaption: (): string => '💾 نسخهٔ پشتیبان دیتابیس ربات',
+
+    backupDone: (sizeLabel: string, users: number): string =>
+      blocks('✅ <b>پشتیبان آماده شد.</b>', bullet([`حجم: ${escapeHtml(sizeLabel)}`, `کاربران: ${toPersianDigits(users)}`])),
+
+    backupFailed: (reason: string): string => blocks('⚠️ پشتیبان‌گیری انجام نشد.', escapeHtml(reason)),
+
+    notAuthorized: (): string => 'این بخش فقط برای مدیران ربات در دسترسه.',
+
+    hint: (text: string): string => `<i>${escapeHtml(text)}</i>`,
   },
 
   // ── خطاها ─────────────────────────────────────────────────────────────────
@@ -425,9 +721,13 @@ export const copy = {
         'مشکل از طرف سماده، نه از حساب تو. چند دقیقه بعد یک‌بار دیگر امتحان کن.',
       ),
 
-    notAuthorized: (): string => 'این بخش فقط برای مدیران ربات در دسترسه.',
-
     unknownUniversity: (): string => 'این دانشگاه پشتیبانی نمی‌شه. یکی از گزینه‌های منو رو انتخاب کن.',
+
+    textOnly: (): string => 'این مرحله فقط متن قبول می‌کنه. لطفاً پیامت رو بنویس و بفرست.',
+
+    emptyQuestion: (): string => 'سؤالت به نظر خالی اومد. یه جمله بنویس و دوباره بفرست.',
+
+    chatbotBusy: (): string => 'هنوز دارم به سؤال قبلیت فکر می‌کنم. چند ثانیه صبر کن و دوباره بفرست.',
 
     invalidUniversitySelection: (): string => 'از دکمه‌های خود منو انتخاب کن تا دانشگاهت رو درست تشخیص بدم.',
   },
