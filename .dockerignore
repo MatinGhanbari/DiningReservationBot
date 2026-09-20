@@ -1,0 +1,36 @@
+# هیچ‌وقت رازها را داخل ایمیج نگذار
+.env
+.env.*
+!.env.example
+
+# وابستگی‌ها و خروجی بیلد
+node_modules
+dist
+coverage
+*.tsbuildinfo
+
+# پایگاه داده
+data
+*.db
+*.db-wal
+*.db-shm
+
+# گیت و ابزارهای توسعه
+.git
+.gitignore
+.vscode
+.idea
+.github
+
+# مستندات و فایل‌های غیرضروری در زمان اجرا
+docs
+*.md
+!README.md
+
+# تست‌ها
+tests
+vitest.config.ts
+
+# لاگ‌ها
+logs
+*.log
