@@ -8,26 +8,14 @@ import { SqliteUserRepository } from '../src/db/user.repository';
 import type { User } from '../src/domain/models';
 import { InvalidCredentialsError, SessionExpiredError } from '../src/shared/errors';
 import { FixedClock } from '../src/shared/clock';
-import { createFakeGateway, createTestDatabase, fixedClock } from './helpers';
+import { createFakeGateway, createTestDatabase, fixedClock, makeUser } from './helpers';
 
 const KEY = 'a-test-key-that-is-definitely-long-enough';
 
-function makeUser(overrides: Partial<User> = {}): User {
-  return {
-    telegramId: 555,
-    firstName: 'مهدی',
-    lastName: 'احمدی',
-    universityId: 8,
-    samadUsername: '99123456',
-    encryptedPassword: new AesSecretBox(KEY).encrypt('old-password'),
-    autoReserveEnabled: false,
-    autoReserveSelfId: null,
-    autoReserveWeekdays: [],
-    createdAt: new Date('2026-09-01T00:00:00Z'),
-    updatedAt: new Date('2026-09-01T00:00:00Z'),
-    ...overrides,
-  };
-}
+/** The shared factory stores a placeholder cipher; these tests need a real one. */
+const withPassword = (overrides: Partial<User> = {}): User =>
+  makeUser({ encryptedPassword: new AesSecretBox(KEY).encrypt('old-password'), ...overrides });
+
 
 describe('session and auth', () => {
   let db: SqliteDatabase;
@@ -72,7 +60,7 @@ describe('session and auth', () => {
 
     it('does not touch stored credentials when Samad rejects the login', async () => {
       const { auth } = build(createFakeGateway({ loginError: new InvalidCredentialsError() }));
-      await users.save(makeUser());
+      await users.save(withPassword());
 
       await expect(auth.login(555, 8, '99123456', 'wrong')).rejects.toBeInstanceOf(InvalidCredentialsError);
 
@@ -84,7 +72,7 @@ describe('session and auth', () => {
     it('keeps auto-reserve configuration across a re-login', async () => {
       const { auth } = build();
 
-      await users.save(makeUser());
+      await users.save(withPassword());
       await users.setAutoReserveSelf(555, 5);
       await users.setAutoReserveEnabled(555, true);
       await users.toggleAutoReserveWeekday(555, 1);

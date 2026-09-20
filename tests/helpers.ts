@@ -9,6 +9,7 @@ import type {
   ReservedMeal,
   SamadSession,
   Self,
+  User,
   UserProfile,
   WeeklyReserves,
 } from '../src/domain/models';
@@ -39,6 +40,31 @@ export function createTestDatabase(): SqliteDatabase {
 /** A clock frozen at an instant, so date-dependent logic is deterministic. */
 export function fixedClock(isoInstant: string = TEST_NOW_ISO): FixedClock {
   return new FixedClock(new Date(isoInstant));
+}
+
+/**
+ * A user record with sensible defaults, so a test only states what it varies.
+ *
+ * Shared rather than duplicated per file: the shape of `User` is a contract, and
+ * a field added to it should not have to be added to four factories in four
+ * places to keep the suite compiling.
+ */
+export function makeUser(overrides: Partial<User> = {}): User {
+  return {
+    telegramId: 555,
+    firstName: 'مهدی',
+    lastName: 'احمدی',
+    universityId: 8,
+    samadUsername: '99123456',
+    encryptedPassword: 'v1:iv:tag:cipher',
+    autoReserveEnabled: false,
+    autoReserveSelfId: null,
+    autoReserveWeekdays: [],
+    creditReminderSentOn: null,
+    createdAt: new Date('2026-09-01T00:00:00Z'),
+    updatedAt: new Date('2026-09-01T00:00:00Z'),
+    ...overrides,
+  };
 }
 
 /**

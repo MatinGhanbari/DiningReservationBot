@@ -1,25 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SqliteUserRepository } from '../src/db/user.repository';
 import type { SqliteDatabase } from '../src/db/database';
-import type { User } from '../src/domain/models';
-import { createTestDatabase } from './helpers';
+import { createTestDatabase, makeUser } from './helpers';
 
-function makeUser(overrides: Partial<User> = {}): User {
-  return {
-    telegramId: 555,
-    firstName: 'مهدی',
-    lastName: 'احمدی',
-    universityId: 8,
-    samadUsername: '99123456',
-    encryptedPassword: 'v1:iv:tag:cipher',
-    autoReserveEnabled: false,
-    autoReserveSelfId: null,
-    autoReserveWeekdays: [],
-    createdAt: new Date('2026-09-01T00:00:00Z'),
-    updatedAt: new Date('2026-09-01T00:00:00Z'),
-    ...overrides,
-  };
-}
 
 describe('SqliteUserRepository', () => {
   let db: SqliteDatabase;

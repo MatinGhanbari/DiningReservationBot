@@ -10,9 +10,19 @@ import type { Notifier } from '../src/domain/ports';
 import type { User } from '../src/domain/models';
 import { SessionExpiredError } from '../src/shared/errors';
 import { FixedClock } from '../src/shared/clock';
-import { createFakeGateway, createTestDatabase, fixedClock, mealOption } from './helpers';
+import { createFakeGateway, createTestDatabase, fixedClock, makeUser, mealOption } from './helpers';
 
 const KEY = 'a-test-key-that-is-definitely-long-enough';
+
+/** Auto-reserve only ever runs for someone who has switched it on. */
+const autoReserveUser = (overrides: Partial<User> = {}): User =>
+  makeUser({
+    encryptedPassword: new AesSecretBox(KEY).encrypt('my-password'),
+    autoReserveEnabled: true,
+    autoReserveSelfId: 5,
+    autoReserveWeekdays: [3],
+    ...overrides,
+  });
 
 /** 2026-09-20 is a Sunday, which is weekday ۱ in the Iranian week. */
 const NOW = '2026-09-20T06:00:00Z';
@@ -20,22 +30,6 @@ const NOW = '2026-09-20T06:00:00Z';
 /** Tuesday 2026-09-22 — weekday ۳. */
 const TUESDAY = new Date('2026-09-22T07:30:00Z');
 
-function makeUser(overrides: Partial<User> = {}): User {
-  return {
-    telegramId: 555,
-    firstName: 'مهدی',
-    lastName: 'احمدی',
-    universityId: 8,
-    samadUsername: '99123456',
-    encryptedPassword: new AesSecretBox(KEY).encrypt('my-password'),
-    autoReserveEnabled: true,
-    autoReserveSelfId: 5,
-    autoReserveWeekdays: [3],
-    createdAt: new Date('2026-09-01T00:00:00Z'),
-    updatedAt: new Date('2026-09-01T00:00:00Z'),
-    ...overrides,
-  };
-}
 
 function createFakeNotifier(): Notifier & { notify: ReturnType<typeof vi.fn> } {
   return { notify: vi.fn(async () => undefined) };
@@ -72,7 +66,7 @@ describe('AutoReserveService', () => {
   describe('settings', () => {
     it('refuses to enable before a dining hall is chosen', async () => {
       const { autoReserve } = build();
-      await users.save(makeUser({ autoReserveSelfId: null }));
+      await users.save(autoReserveUser({ autoReserveSelfId: null }));
 
       // Enabling without a hall would silently do nothing, which is worse than
       // saying what is missing.
@@ -81,7 +75,7 @@ describe('AutoReserveService', () => {
 
     it('enables once a hall is set', async () => {
       const { autoReserve } = build();
-      await users.save(makeUser({ autoReserveEnabled: false }));
+      await users.save(autoReserveUser({ autoReserveEnabled: false }));
 
       await autoReserve.setEnabled(555, true);
 
@@ -90,7 +84,7 @@ describe('AutoReserveService', () => {
 
     it('toggles a weekday and reports the new state', async () => {
       const { autoReserve } = build();
-      await users.save(makeUser({ autoReserveWeekdays: [] }));
+      await users.save(autoReserveUser({ autoReserveWeekdays: [] }));
 
       expect(await autoReserve.toggleWeekday(555, 1)).toBe(true);
       expect((await autoReserve.getSettings(555)).weekdays).toEqual([1]);
@@ -101,7 +95,7 @@ describe('AutoReserveService', () => {
   describe('runForUser', () => {
     it('skips a user with no dining hall configured', async () => {
       const { autoReserve, gateway } = build();
-      const user = makeUser({ autoReserveSelfId: null });
+      const user = autoReserveUser({ autoReserveSelfId: null });
 
       const result = await autoReserve.runForUser(user);
 
@@ -112,16 +106,16 @@ describe('AutoReserveService', () => {
     it('skips a user with no weekdays selected', async () => {
       const { autoReserve } = build();
 
-      expect((await autoReserve.runForUser(makeUser({ autoReserveWeekdays: [] }))).skipped).toBe(true);
+      expect((await autoReserve.runForUser(autoReserveUser({ autoReserveWeekdays: [] }))).skipped).toBe(true);
     });
 
     it('reserves meals that fall on a selected weekday', async () => {
       const { autoReserve, gateway, notifier } = build({
         mealOptions: [mealOption({ programId: 1, servedAt: TUESDAY, daysAhead: 2 })],
       });
-      await users.save(makeUser());
+      await users.save(autoReserveUser());
 
-      const result = await autoReserve.runForUser(makeUser());
+      const result = await autoReserve.runForUser(autoReserveUser());
 
       expect(result.reserved).toBe(1);
       expect(gateway.reserve).toHaveBeenCalledTimes(1);
@@ -133,9 +127,9 @@ describe('AutoReserveService', () => {
       const { autoReserve, gateway } = build({
         mealOptions: [mealOption({ programId: 1, servedAt: new Date('2026-09-23T07:30:00Z') })],
       });
-      await users.save(makeUser());
+      await users.save(autoReserveUser());
 
-      const result = await autoReserve.runForUser(makeUser());
+      const result = await autoReserve.runForUser(autoReserveUser());
 
       expect(result.reserved).toBe(0);
       expect(gateway.reserve).not.toHaveBeenCalled();
@@ -143,9 +137,9 @@ describe('AutoReserveService', () => {
 
     it('does not notify when there was nothing to do', async () => {
       const { autoReserve, notifier } = build({ mealOptions: [] });
-      await users.save(makeUser());
+      await users.save(autoReserveUser());
 
-      await autoReserve.runForUser(makeUser());
+      await autoReserve.runForUser(autoReserveUser());
 
       // A daily "nothing happened" message would train people to ignore the bot.
       expect(notifier.notify).not.toHaveBeenCalled();
@@ -166,9 +160,9 @@ describe('AutoReserveService', () => {
       const notifier = createFakeNotifier();
       const autoReserve = new AutoReserveService(users, reservations, notifier, clock);
 
-      await users.save(makeUser());
+      await users.save(autoReserveUser());
 
-      const result = await autoReserve.runForUser(makeUser());
+      const result = await autoReserve.runForUser(autoReserveUser());
 
       expect(result.failed).toBe(2);
       expect(gateway.reserve).toHaveBeenCalledTimes(2);
@@ -190,9 +184,9 @@ describe('AutoReserveService', () => {
       const reservations = new ReservationService(users, gateway, sessionService, clock);
       const autoReserve = new AutoReserveService(users, reservations, createFakeNotifier(), clock);
 
-      await users.save(makeUser());
+      await users.save(autoReserveUser());
 
-      await autoReserve.runForUser(makeUser());
+      await autoReserve.runForUser(autoReserveUser());
 
       // Three meals were bookable and one failed, so the run has to stop rather
       // than repeat the same dead-session error three times.
@@ -210,8 +204,8 @@ describe('AutoReserveService', () => {
         mealOptions: [mealOption({ programId: 1, servedAt: TUESDAY })],
       });
 
-      await users.save(makeUser({ telegramId: 1, samadUsername: 'a' }));
-      await users.save(makeUser({ telegramId: 2, samadUsername: 'b' }));
+      await users.save(autoReserveUser({ telegramId: 1, samadUsername: 'a' }));
+      await users.save(autoReserveUser({ telegramId: 2, samadUsername: 'b' }));
 
       const summary = await autoReserve.runDaily();
 
@@ -225,8 +219,8 @@ describe('AutoReserveService', () => {
         mealOptions: [mealOption({ programId: 1, servedAt: TUESDAY })],
       });
 
-      await users.save(makeUser({ telegramId: 1, samadUsername: 'a' }));
-      await users.save(makeUser({ telegramId: 2, samadUsername: 'b' }));
+      await users.save(autoReserveUser({ telegramId: 1, samadUsername: 'a' }));
+      await users.save(autoReserveUser({ telegramId: 2, samadUsername: 'b' }));
 
       // The first user's token resolution blows up.
       gateway.listSelfs.mockRejectedValueOnce(new Error('boom'));
@@ -253,7 +247,7 @@ describe('AutoReserveService', () => {
       const reservations = new ReservationService(users, gateway, sessionService, clock);
       const autoReserve = new AutoReserveService(users, reservations, createFakeNotifier(), clock);
 
-      await users.save(makeUser());
+      await users.save(autoReserveUser());
 
       // Two concurrent runs would both see "not reserved yet" and book twice,
       // which costs the user real money. The second tick is dropped, not queued.
