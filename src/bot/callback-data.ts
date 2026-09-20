@@ -27,7 +27,14 @@ export type CallbackAction =
   | { kind: 'auto-reserve-day'; weekday: number }
   | { kind: 'forget-code-share'; reserveId: number }
   | { kind: 'forget-code-share-confirm'; reserveId: number }
-  | { kind: 'forget-code-receive-self'; selfId: number };
+  | { kind: 'forget-code-receive-self'; selfId: number }
+  | { kind: 'admin-user'; telegramId: number }
+  | { kind: 'admin-logout-prompt'; telegramId: number }
+  | { kind: 'admin-logout-confirm'; telegramId: number }
+  | { kind: 'admin-close-ticket'; ticketId: number }
+  | { kind: 'admin-broadcast-send' }
+  | { kind: 'admin-broadcast-cancel' }
+  | { kind: 'admin-purge' };
 
 const WEEK_CODES: Record<WeekSelection, string> = { current: 'c', next: 'n' };
 
@@ -79,6 +86,20 @@ export function encodeCallback(action: CallbackAction): string {
       return `f:c:${action.reserveId}`;
     case 'forget-code-receive-self':
       return `f:g:${action.selfId}`;
+    case 'admin-user':
+      return `x:u:${action.telegramId}`;
+    case 'admin-logout-prompt':
+      return `x:q:${action.telegramId}`;
+    case 'admin-logout-confirm':
+      return `x:l:${action.telegramId}`;
+    case 'admin-close-ticket':
+      return `x:t:${action.ticketId}`;
+    case 'admin-broadcast-send':
+      return 'x:b:y';
+    case 'admin-broadcast-cancel':
+      return 'x:b:n';
+    case 'admin-purge':
+      return 'x:p:y';
   }
 }
 
@@ -145,6 +166,38 @@ export function decodeCallback(data: string): CallbackAction | null {
       if (first === 'g') {
         const selfId = parsePositiveInt(second);
         return selfId === null ? null : { kind: 'forget-code-receive-self', selfId };
+      }
+      return null;
+    }
+
+    case 'x': {
+      if (first === 'u') {
+        const telegramId = parsePositiveInt(second);
+        return telegramId === null ? null : { kind: 'admin-user', telegramId };
+      }
+      if (first === 'q') {
+        const telegramId = parsePositiveInt(second);
+        return telegramId === null ? null : { kind: 'admin-logout-prompt', telegramId };
+      }
+      if (first === 'l') {
+        const telegramId = parsePositiveInt(second);
+        return telegramId === null ? null : { kind: 'admin-logout-confirm', telegramId };
+      }
+      if (first === 't') {
+        const ticketId = parsePositiveInt(second);
+        return ticketId === null ? null : { kind: 'admin-close-ticket', ticketId };
+      }
+      if (first === 'b') {
+        if (second === 'y') {
+          return { kind: 'admin-broadcast-send' };
+        }
+        if (second === 'n') {
+          return { kind: 'admin-broadcast-cancel' };
+        }
+        return null;
+      }
+      if (first === 'p') {
+        return second === 'y' ? { kind: 'admin-purge' } : null;
       }
       return null;
     }

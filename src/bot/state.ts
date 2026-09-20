@@ -20,13 +20,19 @@ export type ConversationState =
   | { step: 'awaiting-username'; universityId: number }
   | { step: 'awaiting-password'; universityId: number; samadUsername: string }
   | { step: 'awaiting-support-message' }
-  | { step: 'awaiting-bad-forget-code' };
+  | { step: 'awaiting-chatbot-question' }
+  | { step: 'awaiting-bad-forget-code' }
+  | { step: 'awaiting-admin-user-query' }
+  | { step: 'awaiting-broadcast-text' }
+  | { step: 'awaiting-broadcast-confirm'; text: string };
 
 export interface ConversationStore {
   get(telegramId: number): Promise<ConversationState | null>;
   set(telegramId: number, state: ConversationState): Promise<void>;
   clear(telegramId: number): Promise<void>;
   size(): number;
+  /** Drops expired flows and reports how many went. */
+  sweep(): number;
 }
 
 /**

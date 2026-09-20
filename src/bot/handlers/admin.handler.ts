@@ -1,0 +1,501 @@
+import type { Context, Telegraf } from 'telegraf';
+import { config } from '../../config/env';
+import { copy } from '../../copy/fa';
+import type { User } from '../../domain/models';
+import { findUniversityById } from '../../domain/universities';
+import { startOfConfiguredDay } from '../../shared/dates';
+import { scopedLogger } from '../../shared/logger';
+import { formatJalaliDateTime, formatNumber, toPersianDigits, weekdayByIndex } from '../../shared/persian';
+import { requireAdmin } from '../guards';
+import {
+  BTN,
+  adminMenu,
+  adminSubMenu,
+  adminUserPicker,
+  broadcastConfirm,
+  logoutConfirm,
+  purgeConfirm,
+  ticketList,
+  userActions,
+} from '../keyboards';
+import { handler, replyHtml, tryReplyHtml } from '../reply';
+import type { BotServices } from '../services';
+import type { AdminOverview } from '../../app/admin.service';
+
+const log = scopedLogger('bot:admin');
+
+/**
+ * The operator panel.
+ *
+ * Every entry point re-checks authorisation rather than trusting that the button
+ * was only shown to an admin: a keyboard from an earlier deployment is still in
+ * someone's chat history, and its buttons still work.
+ *
+ * The handlers here are deliberately thin. They ask `AdminService` for data and
+ * hand it to `copy`, so nothing in this file knows about SQL, and a screen can be
+ * reworded without touching the logic that produces it.
+ */
+
+function displayNameOf(user: User): string {
+  const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+  return name.length === 0 ? 'بی‌نام' : name;
+}
+
+function universityNameOf(universityId: number): string {
+  return findUniversityById(universityId)?.name ?? 'نامشخص';
+}
+
+function autoReserveLabel(user: User): string {
+  if (!user.autoReserveEnabled) {
+    return 'غیرفعال';
+  }
+
+  const days = [...user.autoReserveWeekdays].sort((left, right) => left - right).map(weekdayByIndex);
+
+  return days.length === 0 ? 'فعال (روزی انتخاب نشده)' : `فعال — ${days.join('، ')}`;
+}
+
+function formatBytes(bytes: number): string {
+  const mebibytes = bytes / (1024 * 1024);
+
+  if (mebibytes >= 1) {
+    return `${toPersianDigits(mebibytes.toFixed(1))} مگابایت`;
+  }
+
+  return `${toPersianDigits((bytes / 1024).toFixed(1))} کیلوبایت`;
+}
+
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+
+  const parts: string[] = [];
+
+  if (days > 0) {
+    parts.push(`${toPersianDigits(days)} روز`);
+  }
+  if (hours > 0) {
+    parts.push(`${toPersianDigits(hours)} ساعت`);
+  }
+
+  parts.push(`${toPersianDigits(minutes)} دقیقه`);
+
+  return parts.join(' و ');
+}
+
+/** The headline numbers, shared by the panel home and the statistics screen. */
+function headlineStats(overview: AdminOverview): string[] {
+  return [
+    `👥 کاربران: <b>${formatNumber(overview.users)}</b> (${formatNumber(overview.usersToday)} نفر در ۲۴ ساعت گذشته)`,
+    `⚙️ رزرو خودکار فعال: <b>${formatNumber(overview.withAutoReserve)}</b>`,
+    `🔐 نشست فعال: ${formatNumber(overview.sessions)}`,
+    `📮 تیکت باز: <b>${formatNumber(overview.openTickets)}</b>`,
+    `✍️ پیام پشتیبانی امروز: ${formatNumber(overview.supportMessagesToday)}`,
+    `🤖 پیام چت‌بات امروز: ${formatNumber(overview.chatbotMessagesToday)}`,
+    `🎫 کد فراموشی در مخزن: ${formatNumber(overview.forgetCodesPooled)}`,
+  ];
+}
+
+function systemLines(overview: AdminOverview): string[] {
+  return [
+    `محیط اجرا: <code>${config.NODE_ENV}</code>`,
+    `نسخهٔ Node: <code>${process.version}</code>`,
+    `نسخهٔ اسکیمای دیتابیس: ${formatNumber(overview.schemaVersion)}`,
+    `حجم دیتابیس: ${formatBytes(overview.databaseBytes)}`,
+    `حافظهٔ مصرفی: ${formatBytes(overview.memoryUsedBytes)}`,
+    `آپ‌تایم: ${formatUptime(overview.uptimeSeconds)}`,
+    `گفت‌وگوهای نیمه‌کاره: ${formatNumber(overview.conversations)}`,
+    `چت‌بات: ${overview.chatbotEnabled ? 'فعال' : 'غیرفعال'}`,
+    `منطقهٔ زمانی: <code>${config.TZ}</code>`,
+    `پنجرهٔ رزرو: ${formatNumber(config.RESERVABLE_DAYS_AHEAD)} روز`,
+  ];
+}
+
+function alertsOf(overview: AdminOverview): string[] {
+  const alerts: string[] = [];
+
+  if (!overview.chatbotEnabled) {
+    alerts.push('چت‌بات غیرفعاله چون کلید OpenRouter تنظیم نشده.');
+  }
+
+  if (overview.openTickets > 0) {
+    alerts.push(`${formatNumber(overview.openTickets)} تیکت پشتیبانی بی‌جواب مونده.`);
+  }
+
+  return alerts;
+}
+
+async function onPanel(ctx: Context, services: BotServices): Promise<void> {
+  const adminId = await requireAdmin(ctx);
+
+  if (adminId === null) {
+    return;
+  }
+
+  await services.conversations.clear(adminId);
+
+  const overview = await services.admin.overview();
+
+  await replyHtml(ctx, copy.admin.home({ stats: headlineStats(overview), alerts: alertsOf(overview) }), adminMenu());
+}
+
+async function onStats(ctx: Context, services: BotServices): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const overview = await services.admin.overview();
+
+  await replyHtml(
+    ctx,
+    copy.admin.statsReport({
+      lines: [...headlineStats(overview), `💾 حجم دیتابیس: ${formatBytes(overview.databaseBytes)}`],
+      updatedAt: formatJalaliDateTime(services.clock.now()),
+    }),
+    adminSubMenu(),
+  );
+}
+
+async function onUsers(ctx: Context, services: BotServices): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const [overview, recent] = await Promise.all([services.admin.overview(), services.admin.recentUsers(5)]);
+
+  const rows = recent.map(user =>
+    copy.admin.userRow({
+      telegramId: user.telegramId,
+      displayName: displayNameOf(user),
+      universityName: universityNameOf(user.universityId),
+      autoReserve: user.autoReserveEnabled,
+    }),
+  );
+
+  await replyHtml(
+    ctx,
+    copy.admin.usersReport({
+      total: overview.users,
+      activeToday: overview.usersToday,
+      withAutoReserve: overview.withAutoReserve,
+      rows,
+    }),
+    recent.length === 0
+      ? adminSubMenu()
+      : adminUserPicker(recent.map(user => ({ telegramId: user.telegramId, displayName: displayNameOf(user) }))),
+  );
+
+  await tryReplyHtml(ctx, copy.admin.hint('برای جست‌وجوی هر کاربر، دستور /user و بعد شناسه یا نام کاربری سماد رو بفرست.'));
+}
+
+/** Renders one user's record, reached from the picker, a search, or the command. */
+async function showUser(ctx: Context, services: BotServices, actorId: number, query: string): Promise<void> {
+  const user = await services.admin.findUser(query);
+
+  if (user === null) {
+    await replyHtml(ctx, copy.admin.userNotFound(query), adminSubMenu());
+    return;
+  }
+
+  await services.conversations.clear(actorId);
+
+  await replyHtml(
+    ctx,
+    copy.admin.userDetail({
+      telegramId: user.telegramId,
+      displayName: displayNameOf(user),
+      universityName: universityNameOf(user.universityId),
+      samadUsername: user.samadUsername,
+      autoReserve: autoReserveLabel(user),
+      createdAt: formatJalaliDateTime(user.createdAt),
+      updatedAt: formatJalaliDateTime(user.updatedAt),
+    }),
+    userActions(user.telegramId),
+  );
+}
+
+/** Entered from the wizard, after the admin was asked for a search term. */
+export async function handleAdminUserQuery(
+  ctx: Context,
+  services: BotServices,
+  telegramId: number,
+  query: string,
+): Promise<void> {
+  await showUser(ctx, services, telegramId, query);
+}
+
+/** Entered from the inline picker under the user list. */
+async function onShowUser(ctx: Context, services: BotServices, targetId: number): Promise<void> {
+  const adminId = await requireAdmin(ctx);
+
+  if (adminId === null) {
+    return;
+  }
+
+  await showUser(ctx, services, adminId, String(targetId));
+}
+
+async function onUserQuery(ctx: Context, services: BotServices): Promise<void> {
+  const adminId = await requireAdmin(ctx);
+
+  if (adminId === null) {
+    return;
+  }
+
+  const query = ctx.message !== undefined && 'text' in ctx.message ? ctx.message.text.slice('/user'.length).trim() : '';
+
+  if (query.length === 0) {
+    await services.conversations.set(adminId, { step: 'awaiting-admin-user-query' });
+    await replyHtml(ctx, copy.admin.userSearchPrompt(), adminSubMenu());
+    return;
+  }
+
+  await showUser(ctx, services, adminId, query);
+}
+
+async function onLogoutPrompt(ctx: Context, services: BotServices, targetId: number): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const user = await services.admin.findUser(String(targetId));
+
+  if (user === null) {
+    await replyHtml(ctx, copy.admin.userNotFound(String(targetId)), adminSubMenu());
+    return;
+  }
+
+  await replyHtml(ctx, copy.admin.logoutConfirm(displayNameOf(user)), logoutConfirm(targetId));
+}
+
+async function onLogoutConfirm(ctx: Context, services: BotServices, targetId: number): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const user = await services.admin.findUser(String(targetId));
+
+  if (user === null) {
+    await replyHtml(ctx, copy.admin.userNotFound(String(targetId)), adminSubMenu());
+    return;
+  }
+
+  const displayName = displayNameOf(user);
+
+  await services.admin.logoutUser(targetId);
+  await replyHtml(ctx, copy.admin.logoutDone(displayName), adminSubMenu());
+}
+
+async function onSupportTickets(ctx: Context, services: BotServices): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const [open, closed, today, tickets] = await Promise.all([
+    services.support.countOpen(),
+    services.support.countClosed(),
+    services.support.countMessagesSince(startOfConfiguredDay(services.clock.now())),
+    services.support.listOpen(5),
+  ]);
+
+  const rows = tickets.map(ticket =>
+    copy.admin.ticketRow({
+      ticketId: ticket.id,
+      displayName: ticket.displayName,
+      telegramId: ticket.telegramId,
+      messageCount: ticket.messageCount,
+      lastMessage: ticket.lastMessage,
+      updatedAt: formatJalaliDateTime(ticket.updatedAt),
+    }),
+  );
+
+  await replyHtml(
+    ctx,
+    copy.admin.supportReport({ open, closed, today, rows }),
+    tickets.length === 0
+      ? adminSubMenu()
+      : ticketList(tickets.map(ticket => ({ id: ticket.id, displayName: ticket.displayName }))),
+  );
+}
+
+async function onCloseTicket(ctx: Context, services: BotServices, ticketId: number): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const closed = await services.support.closeTicket(ticketId);
+
+  await replyHtml(
+    ctx,
+    closed ? copy.support.ticketClosed(ticketId) : copy.support.ticketAlreadyClosed(ticketId),
+    adminSubMenu(),
+  );
+}
+
+async function onChatbotReport(ctx: Context, services: BotServices): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const report = await services.admin.chatbotReport();
+
+  await replyHtml(
+    ctx,
+    copy.admin.chatbotReport({
+      today: report.today,
+      week: report.week,
+      usersToday: report.usersToday,
+      model: config.OPENROUTER_MODEL,
+      enabled: services.admin.chatbotAvailable,
+      questions: report.questions,
+    }),
+    adminSubMenu(),
+  );
+}
+
+async function onBroadcast(ctx: Context, services: BotServices): Promise<void> {
+  const adminId = await requireAdmin(ctx);
+
+  if (adminId === null) {
+    return;
+  }
+
+  const audience = await services.admin.broadcastAudience();
+
+  await services.conversations.set(adminId, { step: 'awaiting-broadcast-text' });
+  await replyHtml(ctx, copy.admin.broadcastPrompt(audience), adminSubMenu());
+}
+
+/** Stores the draft and shows the preview. Called by the wizard. */
+export async function handleBroadcastText(
+  ctx: Context,
+  services: BotServices,
+  telegramId: number,
+  text: string,
+): Promise<void> {
+  const audience = await services.admin.broadcastAudience();
+
+  await services.conversations.set(telegramId, { step: 'awaiting-broadcast-confirm', text });
+  await replyHtml(ctx, copy.admin.broadcastConfirm(audience, text), broadcastConfirm());
+}
+
+async function onBroadcastSend(ctx: Context, services: BotServices): Promise<void> {
+  const adminId = await requireAdmin(ctx);
+
+  if (adminId === null) {
+    return;
+  }
+
+  const state = await services.conversations.get(adminId);
+
+  if (state === null || state.step !== 'awaiting-broadcast-confirm') {
+    await replyHtml(ctx, copy.menu.useButtons(), adminSubMenu());
+    return;
+  }
+
+  await services.conversations.clear(adminId);
+  await tryReplyHtml(ctx, copy.admin.broadcastRunning());
+
+  const result = await services.admin.broadcast(state.text);
+
+  await replyHtml(ctx, copy.admin.broadcastDone(result), adminSubMenu());
+}
+
+async function onBroadcastCancel(ctx: Context, services: BotServices): Promise<void> {
+  const adminId = await requireAdmin(ctx);
+
+  if (adminId === null) {
+    return;
+  }
+
+  await services.conversations.clear(adminId);
+  await replyHtml(ctx, copy.menu.chooseOption(), adminMenu());
+}
+
+async function onSystem(ctx: Context, services: BotServices): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const overview = await services.admin.overview();
+
+  await replyHtml(ctx, copy.admin.systemReport({ lines: systemLines(overview) }), adminSubMenu());
+}
+
+async function onMaintenance(ctx: Context): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  await replyHtml(ctx, copy.admin.maintenanceIntro(), purgeConfirm());
+}
+
+async function onPurge(ctx: Context, services: BotServices): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const result = await services.admin.runMaintenance();
+
+  await replyHtml(
+    ctx,
+    copy.admin.purgeDone(
+      result.purgedForgetCodes,
+      result.sweptSessions,
+      result.sweptConversations,
+      result.purgedChatbotMessages,
+    ),
+    adminSubMenu(),
+  );
+}
+
+async function onBackup(ctx: Context, services: BotServices): Promise<void> {
+  const adminId = await requireAdmin(ctx);
+
+  if (adminId === null) {
+    return;
+  }
+
+  await replyHtml(ctx, copy.admin.backupIntro(), adminSubMenu());
+
+  try {
+    const result = await services.admin.sendBackup(adminId, copy.admin.backupCaption());
+
+    await replyHtml(ctx, copy.admin.backupDone(formatBytes(result.sizeBytes), result.users), adminSubMenu());
+  } catch (error) {
+    log.error({ err: error, adminId }, 'backup failed');
+
+    await replyHtml(
+      ctx,
+      copy.admin.backupFailed(error instanceof Error ? error.message : 'خطای ناشناخته'),
+      adminSubMenu(),
+    );
+  }
+}
+
+export function registerAdminHandlers(bot: Telegraf, services: BotServices): void {
+  bot.command('admin', handler('admin-panel', ctx => onPanel(ctx, services)));
+  bot.command('user', handler('admin-user-command', ctx => onUserQuery(ctx, services)));
+
+  bot.hears(BTN.adminPanel, handler('admin-panel', ctx => onPanel(ctx, services)));
+  bot.hears(BTN.adminBack, handler('admin-back', ctx => onPanel(ctx, services)));
+  bot.hears(BTN.adminStats, handler('admin-stats', ctx => onStats(ctx, services)));
+  bot.hears(BTN.adminUsers, handler('admin-users', ctx => onUsers(ctx, services)));
+  bot.hears(BTN.adminSupport, handler('admin-support', ctx => onSupportTickets(ctx, services)));
+  bot.hears(BTN.adminChatbot, handler('admin-chatbot', ctx => onChatbotReport(ctx, services)));
+  bot.hears(BTN.adminBroadcast, handler('admin-broadcast', ctx => onBroadcast(ctx, services)));
+  bot.hears(BTN.adminSystem, handler('admin-system', ctx => onSystem(ctx, services)));
+  bot.hears(BTN.adminMaintenance, handler('admin-maintenance', ctx => onMaintenance(ctx)));
+  bot.hears(BTN.adminBackup, handler('admin-backup', ctx => onBackup(ctx, services)));
+}
+
+export {
+  onShowUser,
+  onLogoutPrompt,
+  onLogoutConfirm,
+  onCloseTicket,
+  onBroadcastSend,
+  onBroadcastCancel,
+  onPurge,
+};

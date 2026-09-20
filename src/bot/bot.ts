@@ -2,6 +2,16 @@ import { Telegraf, type Context } from 'telegraf';
 import { copy } from '../copy/fa';
 import { scopedLogger } from '../shared/logger';
 import { decodeCallback } from './callback-data';
+import {
+  onBroadcastCancel,
+  onBroadcastSend,
+  onCloseTicket,
+  onLogoutConfirm,
+  onLogoutPrompt,
+  onPurge,
+  onShowUser,
+  registerAdminHandlers,
+} from './handlers/admin.handler';
 import { registerAutoReserveHandlers, handleDayToggle, handleSelfChoice } from './handlers/auto-reserve.handler';
 import {
   registerForgetCodeHandlers,
@@ -18,6 +28,7 @@ import {
   handleWeekSelection,
 } from './handlers/reservation.handler';
 import { createTextWizard, handleUniversitySelection, registerStartHandlers } from './handlers/start.handler';
+import { createAdminReplyInterceptor, registerSupportHandlers } from './handlers/support.handler';
 import { handler, replyHtml } from './reply';
 import type { BotServices } from './services';
 
@@ -29,10 +40,12 @@ const log = scopedLogger('bot');
  * Middleware order is the whole design here, and it is load-bearing:
  *
  *   1. Commands — `/start` and friends always win.
- *   2. The login wizard — an active flow claims the message it asked for.
- *   3. Menu buttons — `bot.hears` for each reply-keyboard label.
- *   4. Inline buttons — one dispatcher for every callback query.
- *   5. Fallback — only reached when nothing above matched.
+ *   2. Admin replies — an admin answering a support message is routed to the user
+ *      before any other listener can mistake it for something else.
+ *   3. The message wizard — an active flow claims the message it asked for.
+ *   4. Menu buttons — `bot.hears` for each reply-keyboard label.
+ *   5. Inline buttons — one dispatcher for every callback query.
+ *   6. Fallback — only reached when nothing above matched.
  *
  * The original bot registered these in a different order and had two separate
  * catch-alls, which is why a half-finished login could swallow unrelated
@@ -64,16 +77,23 @@ export class TelegramBot {
     // 1 — commands, plus the reply-keyboard handlers that share their behaviour.
     registerStartHandlers(bot, services);
 
-    // 2 — the wizard, before any button handler can claim its message.
-    bot.on('text', createTextWizard(services));
+    // 2 — an admin's answer to a support message.
+    bot.on('message', createAdminReplyInterceptor(services));
 
-    // 3 — menu buttons.
+    // 3 — the wizard, before any button handler can claim its message.
+    bot.on('message', createTextWizard(services));
+
+    // 4 — menu buttons.
     registerReservationHandlers(bot, services);
     registerForgetCodeHandlers(bot, services);
     registerAutoReserveHandlers(bot, services);
+    registerSupportHandlers(bot, services);
+    registerAdminHandlers(bot, services);
+
+    // 5 — the fallback owns `bot.on('message')`, so it is registered last.
     registerMenuHandlers(bot, services);
 
-    // 4 — inline buttons.
+    // 6 — inline buttons.
     bot.on('callback_query', handler('callback', ctx => this.dispatchCallback(ctx)));
   }
 
@@ -144,6 +164,27 @@ export class TelegramBot {
         return;
       case 'forget-code-receive-self':
         await handleReceiveSelf(ctx, services, action.selfId);
+        return;
+      case 'admin-user':
+        await onShowUser(ctx, services, action.telegramId);
+        return;
+      case 'admin-logout-prompt':
+        await onLogoutPrompt(ctx, services, action.telegramId);
+        return;
+      case 'admin-logout-confirm':
+        await onLogoutConfirm(ctx, services, action.telegramId);
+        return;
+      case 'admin-close-ticket':
+        await onCloseTicket(ctx, services, action.ticketId);
+        return;
+      case 'admin-broadcast-send':
+        await onBroadcastSend(ctx, services);
+        return;
+      case 'admin-broadcast-cancel':
+        await onBroadcastCancel(ctx, services);
+        return;
+      case 'admin-purge':
+        await onPurge(ctx, services);
         return;
     }
   }

@@ -1,7 +1,7 @@
 import { Markup } from 'telegraf';
 import type { MealOption, ReservedMeal, Self } from '../domain/models';
 import { WEEKDAY_NAMES } from '../shared/persian';
-import { copy, selfButton } from '../copy/fa';
+import { copy, buttonLabel, selfButton } from '../copy/fa';
 import { encodeCallback } from './callback-data';
 import type { WeekSelection } from '../app/reservation.service';
 
@@ -34,6 +34,20 @@ export const BTN = {
   autoReserveEnable: '✅ فعال کردن',
   autoReserveDisable: '⛔️ غیرفعال کردن',
   autoReserveChangeSelf: '🍽️ تغییر سلف',
+  // Support submenu
+  supportChatbot: '🤖 پرسیدن از دستیار',
+  supportHuman: '✍️ پیام به پشتیبانی',
+  // Admin panel
+  adminPanel: '🛠️ پنل مدیریت',
+  adminStats: '📊 آمار کلی',
+  adminUsers: '👥 کاربران',
+  adminSupport: '📮 تیکت‌های پشتیبانی',
+  adminChatbot: '🤖 گزارش چت‌بات',
+  adminBroadcast: '📣 پیام همگانی',
+  adminSystem: '🖥️ وضعیت سیستم',
+  adminMaintenance: '🧹 نگهداری',
+  adminBackup: '💾 پشتیبان‌گیری',
+  adminBack: '‹ برگشت به پنل',
 } as const;
 
 /**
@@ -50,18 +64,56 @@ export function isMenuButton(text: string): boolean {
   return MENU_LABELS.has(text);
 }
 
-export const mainMenu = () =>
-  Markup.keyboard([
+/**
+ * The main menu.
+ *
+ * The admin row is appended rather than shown to everyone, so the panel is
+ * discoverable without advertising itself to users who cannot open it.
+ */
+export const mainMenu = (admin = false) => {
+  const rows = [
     [Markup.button.text(BTN.reserveFood), Markup.button.text(BTN.autoReserve)],
     [Markup.button.text(BTN.thisWeekReserves), Markup.button.text(BTN.nextWeekReserves)],
     [Markup.button.text(BTN.forgetCode)],
     [Markup.button.text(BTN.myInfo), Markup.button.text(BTN.about), Markup.button.text(BTN.support)],
-    [Markup.button.text(BTN.logout)],
-  ]).resize();
+  ];
+
+  if (admin) {
+    rows.push([Markup.button.text(BTN.adminPanel)]);
+  }
+
+  rows.push([Markup.button.text(BTN.logout)]);
+
+  return Markup.keyboard(rows).resize();
+};
 
 export const backMenu = () => Markup.keyboard([[Markup.button.text(BTN.back)]]).resize();
 
 export const loginMenu = () => Markup.keyboard([[Markup.button.text(BTN.login)]]).resize();
+
+/** The support submenu. The chatbot row disappears when no model is configured. */
+export const supportMenu = (hasChatbot: boolean) => {
+  const rows = hasChatbot
+    ? [[Markup.button.text(BTN.supportChatbot)], [Markup.button.text(BTN.supportHuman)]]
+    : [[Markup.button.text(BTN.supportHuman)]];
+
+  rows.push([Markup.button.text(BTN.back)]);
+
+  return Markup.keyboard(rows).resize();
+};
+
+export const adminMenu = () =>
+  Markup.keyboard([
+    [Markup.button.text(BTN.adminStats), Markup.button.text(BTN.adminUsers)],
+    [Markup.button.text(BTN.adminSupport), Markup.button.text(BTN.adminChatbot)],
+    [Markup.button.text(BTN.adminBroadcast), Markup.button.text(BTN.adminSystem)],
+    [Markup.button.text(BTN.adminMaintenance), Markup.button.text(BTN.adminBackup)],
+    [Markup.button.text(BTN.back)],
+  ]).resize();
+
+/** Keyboard for an admin sub-screen, where "back" means the panel, not the main menu. */
+export const adminSubMenu = () =>
+  Markup.keyboard([[Markup.button.text(BTN.adminBack)], [Markup.button.text(BTN.back)]]).resize();
 
 export const forgetCodeMenu = () =>
   Markup.keyboard([
@@ -164,3 +216,55 @@ export const autoReserveSelfPicker = (selfs: readonly Self[]) =>
       Markup.button.callback(selfButton(self.name), encodeCallback({ kind: 'auto-reserve-self', selfId: self.id })),
     ]),
   );
+
+// ── Admin panel ─────────────────────────────────────────────────────────────
+
+/** Inline shortcuts to the most recent users, so the admin rarely has to type an id. */
+export const adminUserPicker = (users: readonly { telegramId: number; displayName: string }[]) =>
+  Markup.inlineKeyboard(
+    users.map(user => [
+      Markup.button.callback(
+        buttonLabel(user.displayName),
+        encodeCallback({ kind: 'admin-user', telegramId: user.telegramId }),
+      ),
+    ]),
+  );
+
+/** Opening a user, with the one destructive action behind a confirmation step. */
+export const userActions = (telegramId: number) =>
+  Markup.inlineKeyboard([
+    [
+      Markup.button.callback(
+        '🚪 جدا کردن حساب',
+        encodeCallback({ kind: 'admin-logout-prompt', telegramId }),
+      ),
+    ],
+  ]);
+
+export const logoutConfirm = (telegramId: number) =>
+  Markup.inlineKeyboard([
+    [Markup.button.callback('✅ آره، جدا کن', encodeCallback({ kind: 'admin-logout-confirm', telegramId }))],
+    [Markup.button.callback('‹ نه، بی‌خیال', encodeCallback({ kind: 'admin-user', telegramId }))],
+  ]);
+
+/** One close button per open ticket, labelled with the ticket and its owner. */
+export const ticketList = (tickets: readonly { id: number; displayName: string }[]) =>
+  Markup.inlineKeyboard(
+    tickets.map(ticket => [
+      Markup.button.callback(
+        buttonLabel(`🔒 #${ticket.id} · ${ticket.displayName}`),
+        encodeCallback({ kind: 'admin-close-ticket', ticketId: ticket.id }),
+      ),
+    ]),
+  );
+
+export const broadcastConfirm = () =>
+  Markup.inlineKeyboard([
+    [Markup.button.callback('📣 آره، بفرست', encodeCallback({ kind: 'admin-broadcast-send' }))],
+    [Markup.button.callback('‹ نه، بی‌خیال', encodeCallback({ kind: 'admin-broadcast-cancel' }))],
+  ]);
+
+export const purgeConfirm = () =>
+  Markup.inlineKeyboard([
+    [Markup.button.callback('🧹 پاک‌سازی کن', encodeCallback({ kind: 'admin-purge' }))],
+  ]);

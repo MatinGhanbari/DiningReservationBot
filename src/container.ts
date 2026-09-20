@@ -1,19 +1,26 @@
 import { Telegraf } from 'telegraf';
+import { AdminService } from './app/admin.service';
 import { AutoReserveService } from './app/auto-reserve.service';
 import { AuthService } from './app/auth.service';
+import { ChatbotService } from './app/chatbot.service';
+import { CreditWatchService } from './app/credit-watch.service';
 import { ForgetCodeService } from './app/forget-code.service';
 import { ReservationService } from './app/reservation.service';
 import { SessionService } from './app/session.service';
+import { SupportService } from './app/support.service';
 import { TelegramBot } from './bot/bot';
 import { TelegramNotifier } from './bot/notifier';
 import type { BotServices } from './bot/services';
 import { MemoryConversationStore } from './bot/state';
 import { MemorySessionStore } from './cache/session.store';
-import { config } from './config/env';
+import { config, isChatbotEnabled } from './config/env';
 import { AesSecretBox } from './crypto/secret-box';
+import { SqliteChatbotRepository } from './db/chatbot.repository';
 import { SqliteForgetCodeReportRepository, SqliteForgetCodeRepository } from './db/forget-code.repository';
 import { closeDatabase, openDatabase, type SqliteDatabase } from './db/database';
+import { SqliteSystemProbe } from './db/maintenance';
 import { migrate } from './db/migrations';
+import { SqliteSupportRepository } from './db/support.repository';
 import { SqliteUserRepository } from './db/user.repository';
 import { HealthServer, type HealthReport } from './http/health';
 import { SamadHttpClient } from './samad/client';
@@ -21,6 +28,7 @@ import { SamadApiGateway } from './samad/gateway';
 import { Scheduler, type ScheduledJob } from './scheduler/scheduler';
 import { SystemClock } from './shared/clock';
 import { scopedLogger } from './shared/logger';
+import { OpenRouterAssistant } from './support/openrouter.client';
 
 const log = scopedLogger('container');
 
@@ -59,6 +67,9 @@ export function createContainer(): Container {
   const users = new SqliteUserRepository(db);
   const forgetCodes = new SqliteForgetCodeRepository(db);
   const forgetCodeReports = new SqliteForgetCodeReportRepository(db);
+  const supportTickets = new SqliteSupportRepository(db);
+  const chatbotMessages = new SqliteChatbotRepository(db);
+  const system = new SqliteSystemProbe(db, config.DATABASE_PATH);
 
   const sessions = new MemorySessionStore(clock);
   const conversations = new MemoryConversationStore(clock);
@@ -69,6 +80,18 @@ export function createContainer(): Container {
     logger: scopedLogger('samad'),
   });
   const gateway = new SamadApiGateway(samadHttp, config.RESERVABLE_DAYS_AHEAD);
+
+  // The chatbot is optional: with no key configured the feature is hidden rather
+  // than broken, and `null` is what makes that a compile-time fact everywhere it
+  // is consumed.
+  const assistant = isChatbotEnabled
+    ? new OpenRouterAssistant({
+        apiKey: config.OPENROUTER_API_KEY,
+        baseUrl: config.OPENROUTER_BASE_URL,
+        model: config.OPENROUTER_MODEL,
+        timeoutMs: config.OPENROUTER_TIMEOUT_MS,
+      })
+    : null;
 
   // ── Application ───────────────────────────────────────────────────────────
 
@@ -88,15 +111,37 @@ export function createContainer(): Container {
   // ── Presentation ──────────────────────────────────────────────────────────
 
   const telegram = new Telegraf(config.BOT_TOKEN);
-  const notifier = new TelegramNotifier(telegram);
+  const notifier = new TelegramNotifier(telegram, config.ADMINS);
 
   const autoReserve = new AutoReserveService(users, reservations, notifier, clock);
+  const creditWatch = new CreditWatchService(users, reservations, notifier, clock);
+  const support = new SupportService(supportTickets, notifier);
+  const chatbot = new ChatbotService(assistant, chatbotMessages, clock);
+
+  const admin = new AdminService(
+    users,
+    support,
+    chatbot,
+    chatbotMessages,
+    forgetCodes,
+    forgetCodeService,
+    sessions,
+    conversations,
+    auth,
+    system,
+    notifier,
+  );
 
   const services: BotServices = {
     auth,
     reservations,
     forgetCodes: forgetCodeService,
     autoReserve,
+    creditWatch,
+    support,
+    chatbot,
+    admin,
+    messenger: notifier,
     conversations,
     clock,
   };
@@ -120,6 +165,7 @@ export function createContainer(): Container {
           users: userCount,
           sessions: sessionService.sessionCount(),
           conversations: conversations.size(),
+          openTickets: await support.countOpen(),
         },
       };
     },
@@ -138,15 +184,19 @@ export function createContainer(): Container {
       },
     },
     {
+      name: 'credit-watch',
+      // The evening before the next window opens, so there is still time to pay.
+      expression: config.CREDIT_CHECK_CRON,
+      run: async () => {
+        await creditWatch.runDaily();
+      },
+    },
+    {
       name: 'maintenance',
       // Every six hours: often enough to keep memory flat, rare enough to be free.
       expression: '17 */6 * * *',
       run: async () => {
-        const purgedCodes = await forgetCodeService.purgeExpired();
-        const sweptSessions = sessions.sweep();
-        const sweptConversations = conversations.sweep();
-
-        log.debug({ purgedCodes, sweptSessions, sweptConversations }, 'maintenance sweep finished');
+        await admin.runMaintenance();
       },
     },
   ];
@@ -167,7 +217,10 @@ export function createContainer(): Container {
     await bot.start();
     scheduler.start(jobs);
 
-    log.info({ env: config.NODE_ENV, port: config.PORT }, 'application started');
+    log.info(
+      { env: config.NODE_ENV, port: config.PORT, chatbot: isChatbotEnabled, admins: config.ADMINS.length },
+      'application started',
+    );
   };
 
   const shutdown = async (reason: string): Promise<void> => {

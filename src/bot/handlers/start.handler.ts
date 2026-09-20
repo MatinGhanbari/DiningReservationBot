@@ -1,5 +1,5 @@
 import type { Context, MiddlewareFn, Telegraf } from 'telegraf';
-import { config } from '../../config/env';
+import { isAdmin } from '../../config/env';
 import { copy } from '../../copy/fa';
 import { UNIVERSITIES, findUniversityById } from '../../domain/universities';
 import { messageTextOf, requireLogin, telegramIdOf } from '../guards';
@@ -7,9 +7,8 @@ import { BTN, backMenu, isMenuButton, loginMenu, mainMenu, universityPicker } fr
 import { handler, replyHtml, tryReplyHtml } from '../reply';
 import type { BotServices } from '../services';
 import type { ConversationState } from '../state';
-import { scopedLogger } from '../../shared/logger';
-
-const log = scopedLogger('bot:start');
+import { handleAdminUserQuery, handleBroadcastText } from './admin.handler';
+import { askChatbot, relayToAdmins } from './support.handler';
 
 /**
  * Starting the bot, the login wizard, and the profile screen.
@@ -17,6 +16,12 @@ const log = scopedLogger('bot:start');
  * The wizard is a three-step conversation: choose a university, type a username,
  * type a password. Each step stores exactly what the next one needs, so nothing
  * has to be re-derived from a previous message.
+ *
+ * It also owns the one-shot flows that are just "wait for the next message":
+ * a support message, a chatbot question, an admin user lookup and a broadcast
+ * draft. They share this listener because at most one of them can be active for
+ * a given person, and a second listener inspecting the same state would only
+ * create a race.
  */
 
 async function onStart(ctx: Context, services: BotServices): Promise<void> {
@@ -32,7 +37,7 @@ async function onStart(ctx: Context, services: BotServices): Promise<void> {
   const user = await services.auth.findUser(telegramId);
 
   if (user !== null) {
-    await replyHtml(ctx, copy.start.returning(user.firstName), mainMenu());
+    await replyHtml(ctx, copy.start.returning(user.firstName), mainMenu(isAdmin(telegramId)));
     return;
   }
 
@@ -114,7 +119,7 @@ export async function handleUniversitySelection(
 }
 
 /**
- * The wizard's text listener.
+ * The wizard's message listener.
  *
  * Registered before the menu buttons so that an active flow claims the message.
  * Without that ordering, someone typing their password as «خروج» would log
@@ -124,9 +129,8 @@ export async function handleUniversitySelection(
 export function createTextWizard(services: BotServices): MiddlewareFn<Context> {
   return async (ctx, next) => {
     const telegramId = telegramIdOf(ctx);
-    const text = messageTextOf(ctx);
 
-    if (telegramId === null || text === null) {
+    if (telegramId === null || ctx.message === undefined) {
       await next();
       return;
     }
@@ -138,10 +142,12 @@ export function createTextWizard(services: BotServices): MiddlewareFn<Context> {
       return;
     }
 
+    const text = messageTextOf(ctx);
+
     // Tapping a menu button is an escape hatch: abandon the flow and let the
     // button's own handler run. Otherwise «خروج» typed mid-login would be
     // submitted as a password.
-    if (isMenuButton(text)) {
+    if (text !== null && isMenuButton(text)) {
       await services.conversations.clear(telegramId);
       await next();
       return;
@@ -161,8 +167,20 @@ async function advance(
   services: BotServices,
   telegramId: number,
   state: ConversationState,
-  text: string,
+  text: string | null,
 ): Promise<void> {
+  // A support message may be a photo or a file, so it is the one step that does
+  // not require text.
+  if (state.step === 'awaiting-support-message') {
+    await relayToAdmins(ctx, services, telegramId);
+    return;
+  }
+
+  if (text === null) {
+    await replyHtml(ctx, copy.errors.textOnly());
+    return;
+  }
+
   switch (state.step) {
     case 'awaiting-username': {
       await services.conversations.set(telegramId, {
@@ -193,14 +211,12 @@ async function advance(
       }
 
       await services.conversations.clear(telegramId);
-      await replyHtml(ctx, copy.start.welcome(user.firstName, isNewUser), mainMenu());
+      await replyHtml(ctx, copy.start.welcome(user.firstName, isNewUser), mainMenu(isAdmin(telegramId)));
       return;
     }
 
-    case 'awaiting-support-message': {
-      await services.conversations.clear(telegramId);
-      await forwardToAdmins(ctx);
-      await replyHtml(ctx, copy.support.sent(), backMenu());
+    case 'awaiting-chatbot-question': {
+      await askChatbot(ctx, services, telegramId, text);
       return;
     }
 
@@ -210,24 +226,24 @@ async function advance(
       await replyHtml(ctx, copy.forgetCode.reportReceived(), backMenu());
       return;
     }
-  }
-}
 
-/** Relays a support message to every configured admin. */
-async function forwardToAdmins(ctx: Context): Promise<void> {
-  if (ctx.telegram === undefined) {
-    return;
-  }
-
-  // `allSettled` rather than `all`: one admin having blocked the bot must not
-  // stop the others from receiving the message.
-  const results = await Promise.allSettled(config.ADMINS.map(adminId => ctx.forwardMessage(adminId)));
-
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      log.warn({ err: result.reason, adminIndex: index }, 'could not forward support message to an admin');
+    case 'awaiting-admin-user-query': {
+      await handleAdminUserQuery(ctx, services, telegramId, text);
+      return;
     }
-  });
+
+    case 'awaiting-broadcast-text': {
+      await handleBroadcastText(ctx, services, telegramId, text);
+      return;
+    }
+
+    case 'awaiting-broadcast-confirm': {
+      // Typing again replaces the draft rather than being ignored, which is what
+      // someone who spotted a typo in the preview expects to happen.
+      await handleBroadcastText(ctx, services, telegramId, text);
+      return;
+    }
+  }
 }
 
 export function registerStartHandlers(bot: Telegraf, services: BotServices): void {
