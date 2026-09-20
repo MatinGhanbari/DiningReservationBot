@@ -139,7 +139,7 @@ export class SamadApiGateway implements SamadGateway {
   async listMealOptions(query: ProgramQuery): Promise<readonly MealOption[]> {
     const response = await this.http.request<SamadProgramsResponse>({
       universityId: query.universityId,
-      path: '/rest/programs',
+      path: '/rest/reservations/programs',
       method: 'GET',
       accessToken: query.accessToken,
       query: {
@@ -212,7 +212,7 @@ export class SamadApiGateway implements SamadGateway {
   async listReserves(query: ReservesQuery): Promise<WeeklyReserves> {
     const response = await this.http.request<SamadReservesResponse>({
       universityId: query.universityId,
-      path: '/rest/reserves',
+      path: '/rest/reservations/reserves',
       method: 'GET',
       accessToken: query.accessToken,
       query: {
@@ -267,7 +267,7 @@ export class SamadApiGateway implements SamadGateway {
   async reserve(input: ReserveInput): Promise<ReservationOutcome> {
     const response = await this.http.request<SamadReserveResponse>({
       universityId: input.universityId,
-      path: `/rest/reserves/${input.programId}/reserve`,
+      path: `/rest/reservations/reserves/${input.programId}/reserve`,
       method: 'PUT',
       accessToken: input.accessToken,
       jsonBody: {
@@ -293,7 +293,7 @@ export class SamadApiGateway implements SamadGateway {
   async fetchProfile(universityId: number, accessToken: string): Promise<UserProfile> {
     const response = await this.http.request<SamadProfileResponse>({
       universityId,
-      path: '/rest/users/nurture-profiles',
+      path: '/rest/reservations/users/nurture-profiles',
       method: 'GET',
       accessToken,
     });
@@ -313,7 +313,7 @@ export class SamadApiGateway implements SamadGateway {
     // belonged to a different university's database.
     const response = await this.http.request<SamadForgetCodeResponse>({
       universityId,
-      path: '/rest/forget-card-codes/print',
+      path: '/rest/reservations/forget-card-codes/print',
       method: 'GET',
       accessToken,
       query: { reserveId, count: 1 },
