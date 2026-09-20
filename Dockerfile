@@ -27,9 +27,9 @@ FROM node:22-slim AS dependencies
 WORKDIR /app
 
 # فقط برای مسیر پشتیبان (کامپایل از سورس). در حالت معمول استفاده نمی‌شوند.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 make g++ \
- && rm -rf /var/lib/apt/lists/*
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends python3 make g++
+RUN rm -rf /var/lib/apt/lists/*
 
 # فقط مانیفست‌ها کپی می‌شوند تا لایهٔ نصب وابستگی تا وقتی خود وابستگی‌ها تغییر
 # نکرده‌اند کش شود. کپی‌کردن کل سورس اینجا یعنی هر تغییر در یک فایل، نصب مجدد
@@ -63,9 +63,9 @@ FROM node:22-slim AS runtime
 # tini به‌عنوان PID ۱: سیگنال‌ها را به Node می‌رساند و پروسه‌های یتیم را جمع
 # می‌کند. بدون آن، SIGTERM ممکن است به فرایند نرسد و کانتینر با SIGKILL و
 # بدون checkpoint نهایی WAL کشته شود.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends tini \
- && rm -rf /var/lib/apt/lists/*
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends tini
+RUN rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV PORT=3000
