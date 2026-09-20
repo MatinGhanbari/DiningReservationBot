@@ -1,0 +1,35 @@
+# وابستگی‌ها
+node_modules/
+
+# خروجی بیلد
+dist/
+*.tsbuildinfo
+
+# متغیرهای محیطی و رازها
+.env
+.env.*
+!.env.example
+
+# پایگاه داده و فایل‌های جانبی SQLite
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# لاگ‌ها
+logs/
+*.log
+npm-debug.log*
+
+# پوشش تست
+coverage/
+
+# ابزارها و سیستم‌عامل
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.cache/
+.eslintcache
