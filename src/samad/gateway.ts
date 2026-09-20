@@ -293,7 +293,7 @@ export class SamadApiGateway implements SamadGateway {
   async fetchProfile(universityId: number, accessToken: string): Promise<UserProfile> {
     const response = await this.http.request<SamadProfileResponse>({
       universityId,
-      path: '/rest/reservations/users/nurture-profiles',
+      path: '/rest/users/nurture-profiles',
       method: 'GET',
       accessToken,
     });
