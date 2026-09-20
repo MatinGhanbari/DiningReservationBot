@@ -19,12 +19,7 @@ const KEY_DERIVATION_SALT = 'dining-reservation-bot/password-box/v1';
 
 export class SecretBoxError extends AppError {
   constructor(message: string, options: { cause?: unknown } = {}) {
-    super(
-      'INTERNAL',
-      message,
-      'رمز ذخیره‌شده قابل خواندن نبود. لطفاً یک‌بار دیگر وارد حساب سمادت شو.',
-      options,
-    );
+    super('INTERNAL', message, 'رمز ذخیره‌شده قابل خواندن نبود. لطفاً یک‌بار دیگر وارد حساب سمادت شو.', options);
   }
 }
 
@@ -69,9 +64,7 @@ export class AesSecretBox implements SecretBox {
     const ciphertext = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
     const authTag = cipher.getAuthTag();
 
-    return [FORMAT_VERSION, iv.toString('base64'), authTag.toString('base64'), ciphertext.toString('base64')].join(
-      ':',
-    );
+    return [FORMAT_VERSION, iv.toString('base64'), authTag.toString('base64'), ciphertext.toString('base64')].join(':');
   }
 
   decrypt(payload: string): string {

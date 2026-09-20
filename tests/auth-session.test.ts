@@ -16,7 +16,6 @@ const KEY = 'a-test-key-that-is-definitely-long-enough';
 const withPassword = (overrides: Partial<User> = {}): User =>
   makeUser({ encryptedPassword: new AesSecretBox(KEY).encrypt('old-password'), ...overrides });
 
-
 describe('session and auth', () => {
   let db: SqliteDatabase;
   let users: SqliteUserRepository;
@@ -160,10 +159,7 @@ describe('session and auth', () => {
 
       await auth.login(555, 8, '99123456', 'my-password');
 
-      const operation = vi
-        .fn()
-        .mockRejectedValueOnce(new SessionExpiredError())
-        .mockResolvedValueOnce('done');
+      const operation = vi.fn().mockRejectedValueOnce(new SessionExpiredError()).mockResolvedValueOnce('done');
 
       // Samad can revoke a token before our cached expiry says it is gone.
       const result = await sessionService.withToken(555, operation);

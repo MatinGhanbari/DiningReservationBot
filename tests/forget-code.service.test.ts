@@ -10,15 +10,7 @@ import { SqliteUserRepository } from '../src/db/user.repository';
 import type { User } from '../src/domain/models';
 import { NotFoundError, UpstreamRejectedError } from '../src/shared/errors';
 import { FixedClock } from '../src/shared/clock';
-import {
-  createFakeGateway,
-  createTestDatabase,
-  expectUserMessage,
-  fixedClock,
-  makeUser,
-  mealOption,
-  reservedMeal,
-} from './helpers';
+import { createFakeGateway, createTestDatabase, expectUserMessage, fixedClock, makeUser, mealOption, reservedMeal } from './helpers';
 
 const KEY = 'a-test-key-that-is-definitely-long-enough';
 
@@ -28,7 +20,6 @@ const withPassword = (overrides: Partial<User> = {}): User =>
 
 /** 2026-09-20 is a Sunday; in Tehran that is 2026-09-20 as well. */
 const NOW = '2026-09-20T06:00:00Z';
-
 
 describe('ForgetCodeService', () => {
   let db: SqliteDatabase;

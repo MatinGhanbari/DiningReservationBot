@@ -152,12 +152,7 @@ export interface SamadGateway {
    * response's own date fields are inconsistent across deployments, and the
    * caller already knows which meal it is looking at.
    */
-  issueForgetCode(
-    universityId: number,
-    accessToken: string,
-    reserveId: number,
-    mealDate: Date,
-  ): Promise<IssuedForgetCode>;
+  issueForgetCode(universityId: number, accessToken: string, reserveId: number, mealDate: Date): Promise<IssuedForgetCode>;
 }
 
 /** Resolves a Samad access token for a user, refreshing it when needed. */

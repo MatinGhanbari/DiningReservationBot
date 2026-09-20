@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatbotService } from '../src/app/chatbot.service';
 import { SqliteChatbotRepository } from '../src/db/chatbot.repository';
 import type { SqliteDatabase } from '../src/db/database';
-import type { AssistantGateway, ChatTurn } from '../src/domain/ports';
+import type { AssistantGateway } from '../src/domain/ports';
+import type { ChatTurn } from '../src/domain/models';
 import { createTestDatabase, expectUserMessage, fixedClock } from './helpers';
 
 /**

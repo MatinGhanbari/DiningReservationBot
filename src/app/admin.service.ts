@@ -3,14 +3,7 @@ import { join } from 'node:path';
 import { rm } from 'node:fs/promises';
 import { config, isChatbotEnabled } from '../config/env';
 import type { User } from '../domain/models';
-import type {
-  ChatbotRepository,
-  ForgetCodeRepository,
-  SessionStore,
-  SupportMessenger,
-  SystemProbe,
-  UserRepository,
-} from '../domain/ports';
+import type { ChatbotRepository, ForgetCodeRepository, SessionStore, SupportMessenger, SystemProbe, UserRepository } from '../domain/ports';
 import { addDays, startOfConfiguredDay } from '../shared/dates';
 import { ValidationError } from '../shared/errors';
 import { sanitizeTelegramHtml } from '../shared/sanitize';

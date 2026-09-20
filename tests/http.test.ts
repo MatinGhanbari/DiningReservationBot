@@ -45,9 +45,7 @@ describe('readTextWithLimit', () => {
   });
 
   it('reports the limit it enforced', async () => {
-    const error = await readTextWithLimit(fakeResponse([bytes('x'.repeat(50))]), 10).catch(
-      (caught: unknown) => caught,
-    );
+    const error = await readTextWithLimit(fakeResponse([bytes('x'.repeat(50))]), 10).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ResponseTooLargeError);
     expect((error as ResponseTooLargeError).limitBytes).toBe(10);
@@ -96,9 +94,7 @@ describe('redactUrl', () => {
   });
 
   it('replaces numeric path segments, which are identifiers', () => {
-    expect(redactUrl(new URL('https://samad.example/api/users/99887766/meals'))).toBe(
-      'https://samad.example/api/users/:id/meals',
-    );
+    expect(redactUrl(new URL('https://samad.example/api/users/99887766/meals'))).toBe('https://samad.example/api/users/:id/meals');
   });
 
   it('never lets a secret reach the string', () => {

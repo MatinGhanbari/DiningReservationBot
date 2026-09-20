@@ -26,9 +26,18 @@ async function onBack(ctx: Context, services: BotServices): Promise<void> {
 }
 
 export function registerMenuHandlers(bot: Telegraf, services: BotServices): void {
-  bot.hears(BTN.back, handler('back', ctx => onBack(ctx, services)));
-  bot.hears(BTN.about, handler('about', ctx => replyHtml(ctx, copy.about(), backMenu())));
+  bot.hears(
+    BTN.back,
+    handler('back', ctx => onBack(ctx, services)),
+  );
+  bot.hears(
+    BTN.about,
+    handler('about', ctx => replyHtml(ctx, copy.about(), backMenu())),
+  );
 
   // Registered last, so it only runs when nothing above matched.
-  bot.on('message', handler('fallback', ctx => replyUnknownInput(ctx)));
+  bot.on(
+    'message',
+    handler('fallback', ctx => replyUnknownInput(ctx)),
+  );
 }

@@ -300,20 +300,14 @@ export class SamadApiGateway implements SamadGateway {
 
     return {
       firstName: cleanText(response.payload?.user?.firstName, 'دانشجو'),
-      lastName:
-        typeof response.payload?.user?.lastName === 'string' ? cleanText(response.payload.user.lastName) : null,
+      lastName: typeof response.payload?.user?.lastName === 'string' ? cleanText(response.payload.user.lastName) : null,
       samadUsername: cleanText(response.payload?.user?.username),
       universityId,
       creditRial: typeof response.payload?.credit === 'number' ? response.payload.credit : 0,
     };
   }
 
-  async issueForgetCode(
-    universityId: number,
-    accessToken: string,
-    reserveId: number,
-    mealDate: Date,
-  ): Promise<IssuedForgetCode> {
+  async issueForgetCode(universityId: number, accessToken: string, reserveId: number, mealDate: Date): Promise<IssuedForgetCode> {
     // The university id is used rather than a hard-coded host: the original code
     // always called the KNTU deployment, so students elsewhere got codes that
     // belonged to a different university's database.
@@ -337,10 +331,7 @@ export class SamadApiGateway implements SamadGateway {
     const code = typeof payload.forgotCardCode === 'string' ? payload.forgotCardCode.trim() : '';
 
     if (code.length === 0) {
-      throw new UpstreamRejectedError(
-        'Samad returned an empty forget code',
-        'سماد کد خالی برگرداند. لطفاً یک‌بار دیگر امتحان کن.',
-      );
+      throw new UpstreamRejectedError('Samad returned an empty forget code', 'سماد کد خالی برگرداند. لطفاً یک‌بار دیگر امتحان کن.');
     }
 
     return {

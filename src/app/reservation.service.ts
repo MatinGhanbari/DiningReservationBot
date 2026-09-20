@@ -22,9 +22,7 @@ export class ReservationService {
   ) {}
 
   async listSelfs(telegramId: number): Promise<readonly Self[]> {
-    return this.sessionService.withToken(telegramId, ({ accessToken, universityId }) =>
-      this.gateway.listSelfs(universityId, accessToken),
-    );
+    return this.sessionService.withToken(telegramId, ({ accessToken, universityId }) => this.gateway.listSelfs(universityId, accessToken));
   }
 
   async listMealOptions(

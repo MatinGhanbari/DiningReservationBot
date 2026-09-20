@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  clampText,
-  clampToLine,
-  sanitizeTelegramHtml,
-  stripInvisible,
-} from '../src/shared/sanitize';
+import { clampText, clampToLine, sanitizeTelegramHtml, stripInvisible } from '../src/shared/sanitize';
 
 /**
  * These tests are the actual documentation of what "hardened" means here.
@@ -106,9 +101,7 @@ describe('sanitizeTelegramHtml', () => {
   });
 
   it('keeps an http link and drops every other scheme', () => {
-    expect(sanitizeTelegramHtml('<a href="https://example.com">لینک</a>')).toBe(
-      '<a href="https://example.com">لینک</a>',
-    );
+    expect(sanitizeTelegramHtml('<a href="https://example.com">لینک</a>')).toBe('<a href="https://example.com">لینک</a>');
     // `tg://` and `javascript:` are both things Telegram or a client can act on.
     expect(sanitizeTelegramHtml('<a href="javascript:alert(1)">x</a>')).toBe('x');
     expect(sanitizeTelegramHtml('<a href="tg://user?id=1">x</a>')).toBe('x');
@@ -122,7 +115,7 @@ describe('sanitizeTelegramHtml', () => {
   it('drops an href that tries to carry a second attribute', () => {
     // The space is what makes it an injection attempt rather than a URL, so the
     // whole anchor goes and the words stay.
-    expect(sanitizeTelegramHtml('<a href=\'https://x.example/?a=1" onload=1\'>لینک</a>')).toBe('لینک');
+    expect(sanitizeTelegramHtml("<a href='https://x.example/?a=1\" onload=1'>لینک</a>")).toBe('لینک');
   });
 
   it('escapes a quote inside a surviving href so it cannot close the attribute', () => {

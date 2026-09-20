@@ -57,11 +57,7 @@ async function askChatbot(ctx: Context, services: BotServices, telegramId: numbe
 
   const answer = await services.chatbot.ask(telegramId, question);
 
-  await replyHtml(
-    ctx,
-    copy.support.chatbotAnswer(answer.answer, answer.limit - answer.used),
-    supportMenu(services.chatbot.available),
-  );
+  await replyHtml(ctx, copy.support.chatbotAnswer(answer.answer, answer.limit - answer.used), supportMenu(services.chatbot.available));
 }
 
 /**
@@ -213,19 +209,28 @@ export function createAdminReplyInterceptor(services: BotServices): MiddlewareFn
       return;
     }
 
-    await replyHtml(
-      ctx,
-      outcome === 'delivered' ? copy.support.adminReplyDelivered(ticket.id) : copy.support.adminReplyFailed(),
-    );
+    await replyHtml(ctx, outcome === 'delivered' ? copy.support.adminReplyDelivered(ticket.id) : copy.support.adminReplyFailed());
   };
 }
 
 export function registerSupportHandlers(bot: Telegraf, services: BotServices): void {
-  bot.hears(BTN.support, handler('support-menu', ctx => onSupportMenu(ctx, services)));
-  bot.hears(BTN.supportChatbot, handler('support-chatbot', ctx => onChatbot(ctx, services)));
-  bot.hears(BTN.supportHuman, handler('support-human', ctx => onHumanSupport(ctx, services)));
+  bot.hears(
+    BTN.support,
+    handler('support-menu', ctx => onSupportMenu(ctx, services)),
+  );
+  bot.hears(
+    BTN.supportChatbot,
+    handler('support-chatbot', ctx => onChatbot(ctx, services)),
+  );
+  bot.hears(
+    BTN.supportHuman,
+    handler('support-human', ctx => onHumanSupport(ctx, services)),
+  );
 
-  bot.command('support', handler('support-command', ctx => onSupportMenu(ctx, services)));
+  bot.command(
+    'support',
+    handler('support-command', ctx => onSupportMenu(ctx, services)),
+  );
 }
 
 export { askChatbot, relayToAdmins };

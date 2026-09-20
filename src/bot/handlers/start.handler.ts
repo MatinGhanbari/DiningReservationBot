@@ -96,11 +96,7 @@ async function onMyInfo(ctx: Context, services: BotServices): Promise<void> {
 }
 
 /** Handles the university button and moves the wizard to the username step. */
-export async function handleUniversitySelection(
-  ctx: Context,
-  services: BotServices,
-  universityId: number,
-): Promise<void> {
+export async function handleUniversitySelection(ctx: Context, services: BotServices, universityId: number): Promise<void> {
   const telegramId = telegramIdOf(ctx);
   const university = findUniversityById(universityId);
 
@@ -195,12 +191,7 @@ async function advance(
     case 'awaiting-password': {
       await replyHtml(ctx, copy.start.checking());
 
-      const { user, isNewUser } = await services.auth.login(
-        telegramId,
-        state.universityId,
-        state.samadUsername,
-        text,
-      );
+      const { user, isNewUser } = await services.auth.login(telegramId, state.universityId, state.samadUsername, text);
 
       // Best effort: clearing the message that held the password keeps it out of
       // the chat history on both sides.
@@ -249,11 +240,29 @@ async function advance(
 export function registerStartHandlers(bot: Telegraf, services: BotServices): void {
   bot.start(handler('start', ctx => onStart(ctx, services)));
 
-  bot.command('help', handler('help', ctx => replyHtml(ctx, copy.help(), backMenu())));
-  bot.command('about', handler('about', ctx => replyHtml(ctx, copy.about(), backMenu())));
-  bot.command('logout', handler('logout-command', ctx => onLogout(ctx, services)));
+  bot.command(
+    'help',
+    handler('help', ctx => replyHtml(ctx, copy.help(), backMenu())),
+  );
+  bot.command(
+    'about',
+    handler('about', ctx => replyHtml(ctx, copy.about(), backMenu())),
+  );
+  bot.command(
+    'logout',
+    handler('logout-command', ctx => onLogout(ctx, services)),
+  );
 
-  bot.hears(BTN.login, handler('login-button', ctx => onLogin(ctx, services)));
-  bot.hears(BTN.logout, handler('logout-button', ctx => onLogout(ctx, services)));
-  bot.hears(BTN.myInfo, handler('my-info', ctx => onMyInfo(ctx, services)));
+  bot.hears(
+    BTN.login,
+    handler('login-button', ctx => onLogin(ctx, services)),
+  );
+  bot.hears(
+    BTN.logout,
+    handler('logout-button', ctx => onLogout(ctx, services)),
+  );
+  bot.hears(
+    BTN.myInfo,
+    handler('my-info', ctx => onMyInfo(ctx, services)),
+  );
 }

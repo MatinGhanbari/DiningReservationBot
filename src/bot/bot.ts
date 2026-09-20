@@ -13,12 +13,7 @@ import {
   registerAdminHandlers,
 } from './handlers/admin.handler';
 import { registerAutoReserveHandlers, handleDayToggle, handleSelfChoice } from './handlers/auto-reserve.handler';
-import {
-  registerForgetCodeHandlers,
-  handleReceiveSelf,
-  handleShareConfirm,
-  handleShareTarget,
-} from './handlers/forget-code.handler';
+import { registerForgetCodeHandlers, handleReceiveSelf, handleShareConfirm, handleShareTarget } from './handlers/forget-code.handler';
 import { registerMenuHandlers } from './handlers/menu.handler';
 import {
   registerReservationHandlers,
@@ -94,7 +89,10 @@ export class TelegramBot {
     registerMenuHandlers(bot, services);
 
     // 6 — inline buttons.
-    bot.on('callback_query', handler('callback', ctx => this.dispatchCallback(ctx)));
+    bot.on(
+      'callback_query',
+      handler('callback', ctx => this.dispatchCallback(ctx)),
+    );
   }
 
   /**

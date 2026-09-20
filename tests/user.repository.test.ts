@@ -3,7 +3,6 @@ import { SqliteUserRepository } from '../src/db/user.repository';
 import type { SqliteDatabase } from '../src/db/database';
 import { createTestDatabase, makeUser } from './helpers';
 
-
 describe('SqliteUserRepository', () => {
   let db: SqliteDatabase;
   let users: SqliteUserRepository;

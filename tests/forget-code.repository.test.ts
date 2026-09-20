@@ -66,10 +66,7 @@ describe('SqliteForgetCodeRepository', () => {
 
     // Both students tap at the same moment. The claim is a single UPDATE, so one
     // of them wins and the other gets nothing rather than both getting the code.
-    const [first, second] = await Promise.all([
-      codes.claim(8, 5, '2026-09-22', 200),
-      codes.claim(8, 5, '2026-09-22', 201),
-    ]);
+    const [first, second] = await Promise.all([codes.claim(8, 5, '2026-09-22', 200), codes.claim(8, 5, '2026-09-22', 201)]);
 
     const winners = [first, second].filter(result => result !== null);
     expect(winners).toHaveLength(1);

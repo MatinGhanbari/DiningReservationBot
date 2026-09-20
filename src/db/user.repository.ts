@@ -94,25 +94,17 @@ export class SqliteUserRepository implements UserRepository {
       hasWeekday: db.prepare<[number, number], { present: number }>(
         'SELECT 1 AS present FROM user_auto_reserve_weekdays WHERE telegram_id = ? AND weekday = ?',
       ),
-      addWeekday: db.prepare<[number, number]>(
-        'INSERT OR IGNORE INTO user_auto_reserve_weekdays (telegram_id, weekday) VALUES (?, ?)',
-      ),
-      removeWeekday: db.prepare<[number, number]>(
-        'DELETE FROM user_auto_reserve_weekdays WHERE telegram_id = ? AND weekday = ?',
-      ),
+      addWeekday: db.prepare<[number, number]>('INSERT OR IGNORE INTO user_auto_reserve_weekdays (telegram_id, weekday) VALUES (?, ?)'),
+      removeWeekday: db.prepare<[number, number]>('DELETE FROM user_auto_reserve_weekdays WHERE telegram_id = ? AND weekday = ?'),
       findAllEnabled: db.prepare<[], UserRow>('SELECT * FROM users WHERE auto_reserve_enabled = 1 ORDER BY telegram_id'),
       markCreditReminder: db.prepare<[string, number, number]>(
         'UPDATE users SET credit_reminder_sent_on = ?, updated_at = ? WHERE telegram_id = ?',
       ),
       list: db.prepare<[number, number], UserRow>('SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?'),
       listAll: db.prepare<[], UserRow>('SELECT * FROM users ORDER BY telegram_id'),
-      findBySamadUsername: db.prepare<[string], UserRow>(
-        'SELECT * FROM users WHERE samad_username = ? ORDER BY updated_at DESC LIMIT 1',
-      ),
+      findBySamadUsername: db.prepare<[string], UserRow>('SELECT * FROM users WHERE samad_username = ? ORDER BY updated_at DESC LIMIT 1'),
       count: db.prepare<[], { total: number }>('SELECT COUNT(*) AS total FROM users'),
-      countCreatedSince: db.prepare<[number], { total: number }>(
-        'SELECT COUNT(*) AS total FROM users WHERE created_at >= ?',
-      ),
+      countCreatedSince: db.prepare<[number], { total: number }>('SELECT COUNT(*) AS total FROM users WHERE created_at >= ?'),
     };
   }
 

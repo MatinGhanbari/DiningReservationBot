@@ -30,7 +30,6 @@ const NOW = '2026-09-20T06:00:00Z';
 /** Tuesday 2026-09-22 — weekday ۳. */
 const TUESDAY = new Date('2026-09-22T07:30:00Z');
 
-
 function createFakeNotifier(): Notifier & { notify: ReturnType<typeof vi.fn> } {
   return { notify: vi.fn(async () => undefined) };
 }
@@ -147,10 +146,7 @@ describe('AutoReserveService', () => {
 
     it('keeps going after one meal fails and reports the failure', async () => {
       const gateway = createFakeGateway({
-        mealOptions: [
-          mealOption({ programId: 1, servedAt: TUESDAY }),
-          mealOption({ programId: 2, servedAt: TUESDAY, foodName: 'قیمه' }),
-        ],
+        mealOptions: [mealOption({ programId: 1, servedAt: TUESDAY }), mealOption({ programId: 2, servedAt: TUESDAY, foodName: 'قیمه' })],
         reserveOutcome: { succeeded: false, message: 'موجودی کافی نیست.' },
       });
 

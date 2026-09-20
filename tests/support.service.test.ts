@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SupportService } from '../src/app/support.service';
 import { SqliteSupportRepository } from '../src/db/support.repository';
 import type { SqliteDatabase } from '../src/db/database';
-import type { SupportEnvelope, SupportMessenger } from '../src/domain/ports';
+import type { SupportEnvelope } from '../src/domain/models';
+import type { SupportMessenger } from '../src/domain/ports';
 import { createTestDatabase, expectUserMessage } from './helpers';
 
 /**
@@ -28,12 +29,14 @@ interface FakeMessenger extends SupportMessenger {
   forwarded: Array<{ target: number; source: number; messageId: number }>;
 }
 
-function createFakeMessenger(options: {
-  forwardFails?: boolean;
-  /** Telegram ids that reject delivery, standing in for a blocked bot. */
-  unreachable?: readonly number[];
-  adminIds?: readonly number[];
-} = {}): FakeMessenger {
+function createFakeMessenger(
+  options: {
+    forwardFails?: boolean;
+    /** Telegram ids that reject delivery, standing in for a blocked bot. */
+    unreachable?: readonly number[];
+    adminIds?: readonly number[];
+  } = {},
+): FakeMessenger {
   const placed: PlacedMessage[] = [];
   const forwarded: Array<{ target: number; source: number; messageId: number }> = [];
 
@@ -97,7 +100,7 @@ const envelope = (overrides: Partial<SupportEnvelope> = {}): SupportEnvelope => 
   ...overrides,
 });
 
-function build(options: { messenger?: SupportMessenger; adminIds?: readonly number[] } = {}) {
+function build(options: { messenger?: FakeMessenger; adminIds?: readonly number[] } = {}) {
   const db: SqliteDatabase = createTestDatabase();
   const tickets = new SqliteSupportRepository(db);
   const messenger = options.messenger ?? createFakeMessenger({ adminIds: options.adminIds });
@@ -171,9 +174,7 @@ describe('SupportService', () => {
 
     expect(outcome.outcome).toBe('delivered');
     expect(outcome.ticket?.telegramId).toBe(555);
-    expect(messenger.placed.some(message => message.telegramId === 555 && message.html.includes('دارم درستش می‌کنم'))).toBe(
-      true,
-    );
+    expect(messenger.placed.some(message => message.telegramId === 555 && message.html.includes('دارم درستش می‌کنم'))).toBe(true);
   });
 
   it('routes a reply to the header, not only to the forwarded copy', async () => {
@@ -268,12 +269,8 @@ describe('SupportService', () => {
       text: 'پاسخ محرمانه',
     });
 
-    expect(messenger.placed.some(message => message.telegramId === 222 && message.html.includes('پاسخ محرمانه'))).toBe(
-      false,
-    );
-    expect(messenger.placed.some(message => message.telegramId === 555 && message.html.includes('پاسخ محرمانه'))).toBe(
-      true,
-    );
+    expect(messenger.placed.some(message => message.telegramId === 222 && message.html.includes('پاسخ محرمانه'))).toBe(false);
+    expect(messenger.placed.some(message => message.telegramId === 555 && message.html.includes('پاسخ محرمانه'))).toBe(true);
   });
 
   it('closes a ticket once and reports the second attempt', async () => {

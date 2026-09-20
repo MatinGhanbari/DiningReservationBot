@@ -72,7 +72,10 @@ export function stripInvisible(input: string): string {
  * but joiners is empty rather than "technically has characters".
  */
 export function clampText(input: string, maxLength: number): string {
-  const cleaned = stripInvisible(input).replace(EDGE_JOINER_PATTERN, '').replace(/[ \t]+/g, ' ').trim();
+  const cleaned = stripInvisible(input)
+    .replace(EDGE_JOINER_PATTERN, '')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
   return cleaned.length <= maxLength ? cleaned : `${cleaned.slice(0, maxLength).trimEnd()}…`;
 }
 

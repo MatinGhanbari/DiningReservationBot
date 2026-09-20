@@ -48,8 +48,7 @@ const wallClockFormatter = new Intl.DateTimeFormat('en-US', {
  */
 function timezoneOffsetMs(instant: Date): number {
   const parts = wallClockFormatter.formatToParts(instant);
-  const value = (type: Intl.DateTimeFormatPartTypes): number =>
-    Number(parts.find(part => part.type === type)?.value ?? '0');
+  const value = (type: Intl.DateTimeFormatPartTypes): number => Number(parts.find(part => part.type === type)?.value ?? '0');
 
   const asIfUtc = Date.UTC(
     value('year'),

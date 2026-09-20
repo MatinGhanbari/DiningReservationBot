@@ -86,10 +86,7 @@ export class SessionService implements TokenProvider {
    * race reaches the user as «نشستت منقضی شده» on a request that should have
    * succeeded silently.
    */
-  async withToken<T>(
-    telegramId: number,
-    operation: (context: { accessToken: string; universityId: number }) => Promise<T>,
-  ): Promise<T> {
+  async withToken<T>(telegramId: number, operation: (context: { accessToken: string; universityId: number }) => Promise<T>): Promise<T> {
     const context = await this.getAccessToken(telegramId);
 
     try {

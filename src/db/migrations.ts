@@ -169,9 +169,7 @@ function readSchemaVersion(db: SqliteDatabase): number {
 export function migrate(db: SqliteDatabase): number {
   const startingVersion = readSchemaVersion(db);
 
-  const pending = MIGRATIONS.filter(migration => migration.version > startingVersion).sort(
-    (left, right) => left.version - right.version,
-  );
+  const pending = MIGRATIONS.filter(migration => migration.version > startingVersion).sort((left, right) => left.version - right.version);
 
   if (pending.length === 0) {
     if (!isTest) {

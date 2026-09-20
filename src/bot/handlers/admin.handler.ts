@@ -216,12 +216,7 @@ async function showUser(ctx: Context, services: BotServices, actorId: number, qu
 }
 
 /** Entered from the wizard, after the admin was asked for a search term. */
-export async function handleAdminUserQuery(
-  ctx: Context,
-  services: BotServices,
-  telegramId: number,
-  query: string,
-): Promise<void> {
+export async function handleAdminUserQuery(ctx: Context, services: BotServices, telegramId: number, query: string): Promise<void> {
   await showUser(ctx, services, telegramId, query);
 }
 
@@ -313,9 +308,7 @@ async function onSupportTickets(ctx: Context, services: BotServices): Promise<vo
   await replyHtml(
     ctx,
     copy.admin.supportReport({ open, closed, today, rows }),
-    tickets.length === 0
-      ? adminSubMenu()
-      : ticketList(tickets.map(ticket => ({ id: ticket.id, displayName: ticket.displayName }))),
+    tickets.length === 0 ? adminSubMenu() : ticketList(tickets.map(ticket => ({ id: ticket.id, displayName: ticket.displayName }))),
   );
 }
 
@@ -326,11 +319,7 @@ async function onCloseTicket(ctx: Context, services: BotServices, ticketId: numb
 
   const closed = await services.support.closeTicket(ticketId);
 
-  await replyHtml(
-    ctx,
-    closed ? copy.support.ticketClosed(ticketId) : copy.support.ticketAlreadyClosed(ticketId),
-    adminSubMenu(),
-  );
+  await replyHtml(ctx, closed ? copy.support.ticketClosed(ticketId) : copy.support.ticketAlreadyClosed(ticketId), adminSubMenu());
 }
 
 async function onChatbotReport(ctx: Context, services: BotServices): Promise<void> {
@@ -368,12 +357,7 @@ async function onBroadcast(ctx: Context, services: BotServices): Promise<void> {
 }
 
 /** Stores the draft and shows the preview. Called by the wizard. */
-export async function handleBroadcastText(
-  ctx: Context,
-  services: BotServices,
-  telegramId: number,
-  text: string,
-): Promise<void> {
+export async function handleBroadcastText(ctx: Context, services: BotServices, telegramId: number, text: string): Promise<void> {
   const audience = await services.admin.broadcastAudience();
 
   await services.conversations.set(telegramId, { step: 'awaiting-broadcast-confirm', text });
@@ -440,12 +424,7 @@ async function onPurge(ctx: Context, services: BotServices): Promise<void> {
 
   await replyHtml(
     ctx,
-    copy.admin.purgeDone(
-      result.purgedForgetCodes,
-      result.sweptSessions,
-      result.sweptConversations,
-      result.purgedChatbotMessages,
-    ),
+    copy.admin.purgeDone(result.purgedForgetCodes, result.sweptSessions, result.sweptConversations, result.purgedChatbotMessages),
     adminSubMenu(),
   );
 }
@@ -466,36 +445,60 @@ async function onBackup(ctx: Context, services: BotServices): Promise<void> {
   } catch (error) {
     log.error({ err: error, adminId }, 'backup failed');
 
-    await replyHtml(
-      ctx,
-      copy.admin.backupFailed(error instanceof Error ? error.message : 'خطای ناشناخته'),
-      adminSubMenu(),
-    );
+    await replyHtml(ctx, copy.admin.backupFailed(error instanceof Error ? error.message : 'خطای ناشناخته'), adminSubMenu());
   }
 }
 
 export function registerAdminHandlers(bot: Telegraf, services: BotServices): void {
-  bot.command('admin', handler('admin-panel', ctx => onPanel(ctx, services)));
-  bot.command('user', handler('admin-user-command', ctx => onUserQuery(ctx, services)));
+  bot.command(
+    'admin',
+    handler('admin-panel', ctx => onPanel(ctx, services)),
+  );
+  bot.command(
+    'user',
+    handler('admin-user-command', ctx => onUserQuery(ctx, services)),
+  );
 
-  bot.hears(BTN.adminPanel, handler('admin-panel', ctx => onPanel(ctx, services)));
-  bot.hears(BTN.adminBack, handler('admin-back', ctx => onPanel(ctx, services)));
-  bot.hears(BTN.adminStats, handler('admin-stats', ctx => onStats(ctx, services)));
-  bot.hears(BTN.adminUsers, handler('admin-users', ctx => onUsers(ctx, services)));
-  bot.hears(BTN.adminSupport, handler('admin-support', ctx => onSupportTickets(ctx, services)));
-  bot.hears(BTN.adminChatbot, handler('admin-chatbot', ctx => onChatbotReport(ctx, services)));
-  bot.hears(BTN.adminBroadcast, handler('admin-broadcast', ctx => onBroadcast(ctx, services)));
-  bot.hears(BTN.adminSystem, handler('admin-system', ctx => onSystem(ctx, services)));
-  bot.hears(BTN.adminMaintenance, handler('admin-maintenance', ctx => onMaintenance(ctx)));
-  bot.hears(BTN.adminBackup, handler('admin-backup', ctx => onBackup(ctx, services)));
+  bot.hears(
+    BTN.adminPanel,
+    handler('admin-panel', ctx => onPanel(ctx, services)),
+  );
+  bot.hears(
+    BTN.adminBack,
+    handler('admin-back', ctx => onPanel(ctx, services)),
+  );
+  bot.hears(
+    BTN.adminStats,
+    handler('admin-stats', ctx => onStats(ctx, services)),
+  );
+  bot.hears(
+    BTN.adminUsers,
+    handler('admin-users', ctx => onUsers(ctx, services)),
+  );
+  bot.hears(
+    BTN.adminSupport,
+    handler('admin-support', ctx => onSupportTickets(ctx, services)),
+  );
+  bot.hears(
+    BTN.adminChatbot,
+    handler('admin-chatbot', ctx => onChatbotReport(ctx, services)),
+  );
+  bot.hears(
+    BTN.adminBroadcast,
+    handler('admin-broadcast', ctx => onBroadcast(ctx, services)),
+  );
+  bot.hears(
+    BTN.adminSystem,
+    handler('admin-system', ctx => onSystem(ctx, services)),
+  );
+  bot.hears(
+    BTN.adminMaintenance,
+    handler('admin-maintenance', ctx => onMaintenance(ctx)),
+  );
+  bot.hears(
+    BTN.adminBackup,
+    handler('admin-backup', ctx => onBackup(ctx, services)),
+  );
 }
 
-export {
-  onShowUser,
-  onLogoutPrompt,
-  onLogoutConfirm,
-  onCloseTicket,
-  onBroadcastSend,
-  onBroadcastCancel,
-  onPurge,
-};
+export { onShowUser, onLogoutPrompt, onLogoutConfirm, onCloseTicket, onBroadcastSend, onBroadcastCancel, onPurge };

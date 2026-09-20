@@ -10,11 +10,7 @@ import { formatJalaliDate } from '../shared/persian';
  * and applies to every screen that lists meals.
  */
 
-export function formatMealList(input: {
-  selfName: string;
-  weekLabel: string;
-  meals: readonly MealOption[];
-}): string {
+export function formatMealList(input: { selfName: string; weekLabel: string; meals: readonly MealOption[] }): string {
   const entries = input.meals.map((meal, index) =>
     copy.reservation.mealEntry({
       index: index + 1,

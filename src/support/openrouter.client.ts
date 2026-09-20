@@ -73,16 +73,14 @@ export class OpenRouterAssistant implements AssistantGateway {
       if (response.status === 429) {
         throw new UpstreamUnavailableError({
           message: `OpenRouter rate limited the request: ${detail}`,
-          userMessage:
-            'الان سرِ شلوغیِ چت‌باته و نوبتم نشد. چند دقیقه دیگه امتحان کن، یا از گزینهٔ «پیام به پشتیبانی» استفاده کن.',
+          userMessage: 'الان سرِ شلوغیِ چت‌باته و نوبتم نشد. چند دقیقه دیگه امتحان کن، یا از گزینهٔ «پیام به پشتیبانی» استفاده کن.',
           context: { status: response.status },
         });
       }
 
       throw new UpstreamUnavailableError({
         message: `OpenRouter responded with ${response.status}: ${detail}`,
-        userMessage:
-          'چت‌بات الان در دسترس نیست. می‌تونی از گزینهٔ «پیام به پشتیبانی» استفاده کنی تا اپراتور جوابت رو بده.',
+        userMessage: 'چت‌بات الان در دسترس نیست. می‌تونی از گزینهٔ «پیام به پشتیبانی» استفاده کنی تا اپراتور جوابت رو بده.',
         context: { status: response.status },
       });
     }

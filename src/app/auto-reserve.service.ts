@@ -199,11 +199,7 @@ export class AutoReserveService {
 
     for (const candidate of candidates) {
       try {
-        const outcome = await this.reservations.reserve(
-          user.telegramId,
-          candidate.programId,
-          candidate.foodTypeId,
-        );
+        const outcome = await this.reservations.reserve(user.telegramId, candidate.programId, candidate.foodTypeId);
 
         if (outcome.succeeded) {
           reserved += 1;

@@ -176,12 +176,7 @@ export class SupportService {
    * forwarding is refused, the text is repeated as a reply to the header instead
    * and the routing still works because both ids are recorded.
    */
-  private async deliverToAdmin(
-    adminTelegramId: number,
-    ticket: SupportTicket,
-    envelope: SupportEnvelope,
-    header: string,
-  ): Promise<void> {
+  private async deliverToAdmin(adminTelegramId: number, ticket: SupportTicket, envelope: SupportEnvelope, header: string): Promise<void> {
     const headerId = await this.messenger.send(adminTelegramId, header);
 
     if (headerId !== null) {
@@ -198,9 +193,7 @@ export class SupportService {
     const body = copy.support.adminBody(envelope.content);
 
     const bodyId =
-      headerId === null
-        ? await this.messenger.send(adminTelegramId, body)
-        : await this.messenger.reply(adminTelegramId, headerId, body);
+      headerId === null ? await this.messenger.send(adminTelegramId, body) : await this.messenger.reply(adminTelegramId, headerId, body);
 
     if (bodyId !== null) {
       await this.tickets.recordDelivery(ticket.id, adminTelegramId, bodyId);

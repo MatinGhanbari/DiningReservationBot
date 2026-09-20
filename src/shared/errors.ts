@@ -48,12 +48,7 @@ export class AppError extends Error {
 /** The stored session is gone or was rejected upstream: the user must log in again. */
 export class SessionExpiredError extends AppError {
   constructor(options: AppErrorOptions = {}) {
-    super(
-      'SESSION_EXPIRED',
-      'No valid session for this user',
-      'نشستت منقضی شده. لطفاً یک‌بار دیگر وارد حساب سمادت شو.',
-      options,
-    );
+    super('SESSION_EXPIRED', 'No valid session for this user', 'نشستت منقضی شده. لطفاً یک‌بار دیگر وارد حساب سمادت شو.', options);
   }
 }
 

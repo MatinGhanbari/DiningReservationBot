@@ -112,8 +112,7 @@ export const adminMenu = () =>
   ]).resize();
 
 /** Keyboard for an admin sub-screen, where "back" means the panel, not the main menu. */
-export const adminSubMenu = () =>
-  Markup.keyboard([[Markup.button.text(BTN.adminBack)], [Markup.button.text(BTN.back)]]).resize();
+export const adminSubMenu = () => Markup.keyboard([[Markup.button.text(BTN.adminBack)], [Markup.button.text(BTN.back)]]).resize();
 
 export const forgetCodeMenu = () =>
   Markup.keyboard([
@@ -139,9 +138,7 @@ export const universityPicker = (universities: readonly { id: number; name: stri
 
 export const selfPicker = (week: WeekSelection, selfs: readonly Self[]) =>
   Markup.inlineKeyboard(
-    selfs.map(self => [
-      Markup.button.callback(selfButton(self.name), encodeCallback({ kind: 'select-self', week, selfId: self.id })),
-    ]),
+    selfs.map(self => [Markup.button.callback(selfButton(self.name), encodeCallback({ kind: 'select-self', week, selfId: self.id }))]),
   );
 
 /**
@@ -173,10 +170,7 @@ export const weekdayPicker = (selected: readonly number[]) => {
   const selectedSet = new Set(selected);
 
   const buttons = WEEKDAY_NAMES.map((name, index) =>
-    Markup.button.callback(
-      `${selectedSet.has(index) ? '✅' : '▫️'} ${name}`,
-      encodeCallback({ kind: 'auto-reserve-day', weekday: index }),
-    ),
+    Markup.button.callback(`${selectedSet.has(index) ? '✅' : '▫️'} ${name}`, encodeCallback({ kind: 'auto-reserve-day', weekday: index })),
   );
 
   return Markup.inlineKeyboard([buttons.slice(0, 2), buttons.slice(2, 4), buttons.slice(4, 6), buttons.slice(6)]);
@@ -212,9 +206,7 @@ export const receiveSelfPicker = (selfs: readonly Self[]) =>
 
 export const autoReserveSelfPicker = (selfs: readonly Self[]) =>
   Markup.inlineKeyboard(
-    selfs.map(self => [
-      Markup.button.callback(selfButton(self.name), encodeCallback({ kind: 'auto-reserve-self', selfId: self.id })),
-    ]),
+    selfs.map(self => [Markup.button.callback(selfButton(self.name), encodeCallback({ kind: 'auto-reserve-self', selfId: self.id }))]),
   );
 
 // ── Admin panel ─────────────────────────────────────────────────────────────
@@ -223,23 +215,13 @@ export const autoReserveSelfPicker = (selfs: readonly Self[]) =>
 export const adminUserPicker = (users: readonly { telegramId: number; displayName: string }[]) =>
   Markup.inlineKeyboard(
     users.map(user => [
-      Markup.button.callback(
-        buttonLabel(user.displayName),
-        encodeCallback({ kind: 'admin-user', telegramId: user.telegramId }),
-      ),
+      Markup.button.callback(buttonLabel(user.displayName), encodeCallback({ kind: 'admin-user', telegramId: user.telegramId })),
     ]),
   );
 
 /** Opening a user, with the one destructive action behind a confirmation step. */
 export const userActions = (telegramId: number) =>
-  Markup.inlineKeyboard([
-    [
-      Markup.button.callback(
-        '🚪 جدا کردن حساب',
-        encodeCallback({ kind: 'admin-logout-prompt', telegramId }),
-      ),
-    ],
-  ]);
+  Markup.inlineKeyboard([[Markup.button.callback('🚪 جدا کردن حساب', encodeCallback({ kind: 'admin-logout-prompt', telegramId }))]]);
 
 export const logoutConfirm = (telegramId: number) =>
   Markup.inlineKeyboard([
@@ -265,6 +247,4 @@ export const broadcastConfirm = () =>
   ]);
 
 export const purgeConfirm = () =>
-  Markup.inlineKeyboard([
-    [Markup.button.callback('🧹 پاک‌سازی کن', encodeCallback({ kind: 'admin-purge' }))],
-  ]);
+  Markup.inlineKeyboard([[Markup.button.callback('🧹 پاک‌سازی کن', encodeCallback({ kind: 'admin-purge' }))]]);

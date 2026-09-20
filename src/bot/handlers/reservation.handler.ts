@@ -25,12 +25,7 @@ async function onChooseWeekForReservation(ctx: Context, services: BotServices): 
 }
 
 /** Shows the dining halls for a week, then the menu of the one that was picked. */
-export async function handleSelfSelection(
-  ctx: Context,
-  services: BotServices,
-  week: WeekSelection,
-  selfId: number,
-): Promise<void> {
+export async function handleSelfSelection(ctx: Context, services: BotServices, week: WeekSelection, selfId: number): Promise<void> {
   const guard = await requireLogin(ctx, services);
 
   if (guard === null) {
@@ -51,20 +46,11 @@ export async function handleSelfSelection(
     return;
   }
 
-  await replyHtml(
-    ctx,
-    formatMealList({ selfName, weekLabel: weekLabel(week), meals }),
-    mealPicker(meals),
-  );
+  await replyHtml(ctx, formatMealList({ selfName, weekLabel: weekLabel(week), meals }), mealPicker(meals));
 }
 
 /** Books one meal and reports exactly what Samad said. */
-export async function handleReserveMeal(
-  ctx: Context,
-  services: BotServices,
-  programId: number,
-  foodTypeId: number,
-): Promise<void> {
+export async function handleReserveMeal(ctx: Context, services: BotServices, programId: number, foodTypeId: number): Promise<void> {
   const guard = await requireLogin(ctx, services);
 
   if (guard === null) {
@@ -83,11 +69,7 @@ export async function handleReserveMeal(
 }
 
 /** Shows the reservations already made for a week. */
-export async function handleShowReserves(
-  ctx: Context,
-  services: BotServices,
-  week: WeekSelection,
-): Promise<void> {
+export async function handleShowReserves(ctx: Context, services: BotServices, week: WeekSelection): Promise<void> {
   const guard = await requireLogin(ctx, services);
 
   if (guard === null) {
@@ -127,16 +109,21 @@ async function onShowSelfsForReservation(ctx: Context, services: BotServices, we
 }
 
 export function registerReservationHandlers(bot: Telegraf, services: BotServices): void {
-  bot.hears(BTN.reserveFood, handler('reserve-food', ctx => onChooseWeekForReservation(ctx, services)));
-  bot.hears(BTN.thisWeekReserves, handler('this-week-reserves', ctx => handleShowReserves(ctx, services, 'current')));
-  bot.hears(BTN.nextWeekReserves, handler('next-week-reserves', ctx => handleShowReserves(ctx, services, 'next')));
+  bot.hears(
+    BTN.reserveFood,
+    handler('reserve-food', ctx => onChooseWeekForReservation(ctx, services)),
+  );
+  bot.hears(
+    BTN.thisWeekReserves,
+    handler('this-week-reserves', ctx => handleShowReserves(ctx, services, 'current')),
+  );
+  bot.hears(
+    BTN.nextWeekReserves,
+    handler('next-week-reserves', ctx => handleShowReserves(ctx, services, 'next')),
+  );
 }
 
 /** Routes a week chosen from the inline picker to the dining-hall list. */
-export async function handleWeekSelection(
-  ctx: Context,
-  services: BotServices,
-  week: WeekSelection,
-): Promise<void> {
+export async function handleWeekSelection(ctx: Context, services: BotServices, week: WeekSelection): Promise<void> {
   await onShowSelfsForReservation(ctx, services, week);
 }

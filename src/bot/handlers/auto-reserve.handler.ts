@@ -127,11 +127,7 @@ export async function handleDayToggle(ctx: Context, services: BotServices, weekd
   const isSelected = await services.autoReserve.toggleWeekday(guard.telegramId, weekday);
   const settings = await services.autoReserve.getSettings(guard.telegramId);
 
-  await replyHtml(
-    ctx,
-    copy.autoReserve.dayToggled(weekdayByIndex(weekday), isSelected),
-    weekdayPicker(settings.weekdays),
-  );
+  await replyHtml(ctx, copy.autoReserve.dayToggled(weekdayByIndex(weekday), isSelected), weekdayPicker(settings.weekdays));
 }
 
 async function onChangeSelf(ctx: Context, services: BotServices): Promise<void> {
@@ -177,9 +173,24 @@ export async function handleSelfChoice(ctx: Context, services: BotServices, self
 }
 
 export function registerAutoReserveHandlers(bot: Telegraf, services: BotServices): void {
-  bot.hears(BTN.autoReserve, handler('auto-reserve-menu', ctx => onAutoReserveMenu(ctx, services)));
-  bot.hears(BTN.autoReserveEnable, handler('auto-reserve-enable', ctx => onEnable(ctx, services)));
-  bot.hears(BTN.autoReserveDisable, handler('auto-reserve-disable', ctx => onDisable(ctx, services)));
-  bot.hears(BTN.autoReserveDays, handler('auto-reserve-days', ctx => onChangeDays(ctx, services)));
-  bot.hears(BTN.autoReserveChangeSelf, handler('auto-reserve-self', ctx => onChangeSelf(ctx, services)));
+  bot.hears(
+    BTN.autoReserve,
+    handler('auto-reserve-menu', ctx => onAutoReserveMenu(ctx, services)),
+  );
+  bot.hears(
+    BTN.autoReserveEnable,
+    handler('auto-reserve-enable', ctx => onEnable(ctx, services)),
+  );
+  bot.hears(
+    BTN.autoReserveDisable,
+    handler('auto-reserve-disable', ctx => onDisable(ctx, services)),
+  );
+  bot.hears(
+    BTN.autoReserveDays,
+    handler('auto-reserve-days', ctx => onChangeDays(ctx, services)),
+  );
+  bot.hears(
+    BTN.autoReserveChangeSelf,
+    handler('auto-reserve-self', ctx => onChangeSelf(ctx, services)),
+  );
 }

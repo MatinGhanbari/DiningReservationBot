@@ -32,18 +32,12 @@ export class SqliteChatbotRepository implements ChatbotRepository {
       countForUserSince: db.prepare<[number, number, string], { total: number }>(
         'SELECT COUNT(*) AS total FROM chatbot_messages WHERE telegram_id = ? AND created_at >= ? AND role = ?',
       ),
-      countSince: db.prepare<[number], { total: number }>(
-        'SELECT COUNT(*) AS total FROM chatbot_messages WHERE created_at >= ?',
-      ),
+      countSince: db.prepare<[number], { total: number }>('SELECT COUNT(*) AS total FROM chatbot_messages WHERE created_at >= ?'),
       countUsersSince: db.prepare<[number], { total: number }>(
         'SELECT COUNT(DISTINCT telegram_id) AS total FROM chatbot_messages WHERE created_at >= ?',
       ),
-      recent: db.prepare<[number], MessageRow>(
-        'SELECT * FROM chatbot_messages ORDER BY id DESC LIMIT ?',
-      ),
-      recentQuestions: db.prepare<[number], MessageRow>(
-        "SELECT * FROM chatbot_messages WHERE role = 'user' ORDER BY id DESC LIMIT ?",
-      ),
+      recent: db.prepare<[number], MessageRow>('SELECT * FROM chatbot_messages ORDER BY id DESC LIMIT ?'),
+      recentQuestions: db.prepare<[number], MessageRow>("SELECT * FROM chatbot_messages WHERE role = 'user' ORDER BY id DESC LIMIT ?"),
       purgeBefore: db.prepare<[number]>('DELETE FROM chatbot_messages WHERE created_at < ?'),
     };
   }

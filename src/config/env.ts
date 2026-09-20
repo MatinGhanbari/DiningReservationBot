@@ -31,8 +31,7 @@ function loadDotEnvFile(fileName = '.env'): void {
     const key = line.slice(0, separatorIndex).trim();
     let value = line.slice(separatorIndex + 1).trim();
 
-    const isQuoted =
-      (value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"));
+    const isQuoted = (value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"));
 
     if (isQuoted && value.length >= 2) {
       value = value.slice(1, -1);
@@ -118,9 +117,7 @@ const EnvSchema = z.object({
   DB_MMAP_MB: positiveInteger(256),
 
   // Security
-  ENCRYPTION_KEY: z
-    .string()
-    .min(32, 'کلید رمزنگاری باید حداقل ۳۲ کاراکتر باشد. با دستور «openssl rand -hex 32» یکی بسازید.'),
+  ENCRYPTION_KEY: z.string().min(32, 'کلید رمزنگاری باید حداقل ۳۲ کاراکتر باشد. با دستور «openssl rand -hex 32» یکی بسازید.'),
 
   // Session / cache
   SESSION_TTL_MINUTES: positiveInteger(60),

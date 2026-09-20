@@ -46,7 +46,10 @@ function toTicket(row: TicketRow): SupportTicket {
 
 /** A person who never logged in has no name on file, so the ticket says so. */
 function displayNameOf(firstName: string | null, lastName: string | null): string {
-  const name = [firstName, lastName].filter((part): part is string => part !== null && part.length > 0).join(' ').trim();
+  const name = [firstName, lastName]
+    .filter((part): part is string => part !== null && part.length > 0)
+    .join(' ')
+    .trim();
   return name.length === 0 ? 'کاربر بدون حساب' : name;
 }
 
@@ -69,12 +72,8 @@ export class SqliteSupportRepository implements SupportRepository {
       closeTicket: db.prepare<[number, number, number]>(
         "UPDATE support_tickets SET status = 'closed', closed_at = ?, updated_at = ? WHERE id = ? AND status = 'open'",
       ),
-      listMessages: db.prepare<[number, number], MessageRow>(
-        'SELECT * FROM support_messages WHERE ticket_id = ? ORDER BY id DESC LIMIT ?',
-      ),
-      countMessages: db.prepare<[number], { total: number }>(
-        'SELECT COUNT(*) AS total FROM support_messages WHERE ticket_id = ?',
-      ),
+      listMessages: db.prepare<[number, number], MessageRow>('SELECT * FROM support_messages WHERE ticket_id = ? ORDER BY id DESC LIMIT ?'),
+      countMessages: db.prepare<[number], { total: number }>('SELECT COUNT(*) AS total FROM support_messages WHERE ticket_id = ?'),
       recordDelivery: db.prepare<[number, number, number, number]>(
         'INSERT OR IGNORE INTO support_deliveries (ticket_id, admin_telegram_id, message_id, created_at) VALUES (?, ?, ?, ?)',
       ),
@@ -97,15 +96,9 @@ export class SqliteSupportRepository implements SupportRepository {
         ORDER BY t.updated_at DESC
         LIMIT ?
       `),
-      countByStatus: db.prepare<[string], { total: number }>(
-        'SELECT COUNT(*) AS total FROM support_tickets WHERE status = ?',
-      ),
-      countMessagesSince: db.prepare<[number], { total: number }>(
-        'SELECT COUNT(*) AS total FROM support_messages WHERE created_at >= ?',
-      ),
-      lastMessageAt: db.prepare<[], { latest: number | null }>(
-        'SELECT MAX(created_at) AS latest FROM support_messages',
-      ),
+      countByStatus: db.prepare<[string], { total: number }>('SELECT COUNT(*) AS total FROM support_tickets WHERE status = ?'),
+      countMessagesSince: db.prepare<[number], { total: number }>('SELECT COUNT(*) AS total FROM support_messages WHERE created_at >= ?'),
+      lastMessageAt: db.prepare<[], { latest: number | null }>('SELECT MAX(created_at) AS latest FROM support_messages'),
     };
   }
 
@@ -115,8 +108,7 @@ export class SqliteSupportRepository implements SupportRepository {
     const run = this.db.transaction(() => {
       const existing = this.statements.findOpen.get(envelope.telegramId, 'open');
 
-      const ticketId =
-        existing === undefined ? this.insertTicket(envelope.telegramId, now) : existing.id;
+      const ticketId = existing === undefined ? this.insertTicket(envelope.telegramId, now) : existing.id;
 
       this.statements.insertMessage.run(ticketId, 'in', envelope.content, now);
       this.statements.touchTicket.run(now, ticketId);

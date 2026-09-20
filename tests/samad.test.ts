@@ -39,17 +39,23 @@ describe('SamadHttpClient', () => {
   });
 
   it('treats 401 as an expired session by default', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({}, 401)));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({}, 401)),
+    );
 
-    await expect(
-      createClient().request({ universityId: 8, path: '/rest/selfs', method: 'GET', accessToken: 'x' }),
-    ).rejects.toBeInstanceOf(SessionExpiredError);
+    await expect(createClient().request({ universityId: 8, path: '/rest/selfs', method: 'GET', accessToken: 'x' })).rejects.toBeInstanceOf(
+      SessionExpiredError,
+    );
 
     vi.unstubAllGlobals();
   });
 
   it('treats 401 on the token endpoint as wrong credentials, not an expired session', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({}, 401)));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({}, 401)),
+    );
 
     // The distinction matters: one message tells the user to log in again, the
     // other tells them the password they just typed was wrong.
@@ -107,7 +113,10 @@ describe('SamadHttpClient', () => {
   });
 
   it('surfaces a non-JSON error page as an unavailable upstream', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>502 Bad Gateway</html>', { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>502 Bad Gateway</html>', { status: 200 })),
+    );
 
     await expect(createClient(0).request({ universityId: 8, path: '/rest/selfs', method: 'GET' })).rejects.toThrow();
 
@@ -149,8 +158,24 @@ describe('SamadApiGateway', () => {
     request.mockResolvedValueOnce({
       payload: {
         selfWeekPrograms: [
-          [{ programId: 1, selfId: 5, daysDifferenceWithToday: 3, date: '2026-09-22T00:00:00Z', programFoodTypes: [{ foodTypeId: 10, foodNames: 'چلوکباب', price: 120_000 }] }],
-          [{ programId: 2, selfId: 5, daysDifferenceWithToday: 4, date: '2026-09-23T00:00:00Z', programFoodTypes: [{ foodTypeId: 11, foodNames: 'قیمه', price: 90_000 }] }],
+          [
+            {
+              programId: 1,
+              selfId: 5,
+              daysDifferenceWithToday: 3,
+              date: '2026-09-22T00:00:00Z',
+              programFoodTypes: [{ foodTypeId: 10, foodNames: 'چلوکباب', price: 120_000 }],
+            },
+          ],
+          [
+            {
+              programId: 2,
+              selfId: 5,
+              daysDifferenceWithToday: 4,
+              date: '2026-09-23T00:00:00Z',
+              programFoodTypes: [{ foodTypeId: 11, foodNames: 'قیمه', price: 90_000 }],
+            },
+          ],
         ],
         userWeekReserves: [],
       },
@@ -167,8 +192,20 @@ describe('SamadApiGateway', () => {
       payload: {
         selfWeekPrograms: [
           [
-            { programId: 1, selfId: 5, daysDifferenceWithToday: 2, date: '2026-09-21T00:00:00Z', programFoodTypes: [{ foodTypeId: 10, foodNames: 'زود', price: 1 }] },
-            { programId: 2, selfId: 5, daysDifferenceWithToday: 3, date: '2026-09-22T00:00:00Z', programFoodTypes: [{ foodTypeId: 11, foodNames: 'دیر', price: 1 }] },
+            {
+              programId: 1,
+              selfId: 5,
+              daysDifferenceWithToday: 2,
+              date: '2026-09-21T00:00:00Z',
+              programFoodTypes: [{ foodTypeId: 10, foodNames: 'زود', price: 1 }],
+            },
+            {
+              programId: 2,
+              selfId: 5,
+              daysDifferenceWithToday: 3,
+              date: '2026-09-22T00:00:00Z',
+              programFoodTypes: [{ foodTypeId: 11, foodNames: 'دیر', price: 1 }],
+            },
           ],
         ],
         userWeekReserves: [],
@@ -187,8 +224,20 @@ describe('SamadApiGateway', () => {
       payload: {
         selfWeekPrograms: [
           [
-            { programId: 1, selfId: 5, daysDifferenceWithToday: 3, date: '2026-09-23T00:00:00Z', programFoodTypes: [{ foodTypeId: 10, foodNames: 'رزروشده', price: 1 }] },
-            { programId: 2, selfId: 5, daysDifferenceWithToday: 3, date: '2026-09-23T00:00:00Z', programFoodTypes: [{ foodTypeId: 11, foodNames: 'آزاد', price: 1 }] },
+            {
+              programId: 1,
+              selfId: 5,
+              daysDifferenceWithToday: 3,
+              date: '2026-09-23T00:00:00Z',
+              programFoodTypes: [{ foodTypeId: 10, foodNames: 'رزروشده', price: 1 }],
+            },
+            {
+              programId: 2,
+              selfId: 5,
+              daysDifferenceWithToday: 3,
+              date: '2026-09-23T00:00:00Z',
+              programFoodTypes: [{ foodTypeId: 11, foodNames: 'آزاد', price: 1 }],
+            },
           ],
         ],
         userWeekReserves: [{ programId: 1 }],
@@ -204,7 +253,15 @@ describe('SamadApiGateway', () => {
     request.mockResolvedValueOnce({
       payload: {
         selfWeekPrograms: [
-          [{ programId: 1, selfId: 5, daysDifferenceWithToday: 0, date: '2026-09-20T00:00:00Z', programFoodTypes: [{ foodTypeId: 10, foodNames: 'امروز', price: 1 }] }],
+          [
+            {
+              programId: 1,
+              selfId: 5,
+              daysDifferenceWithToday: 0,
+              date: '2026-09-20T00:00:00Z',
+              programFoodTypes: [{ foodTypeId: 10, foodNames: 'امروز', price: 1 }],
+            },
+          ],
         ],
         userWeekReserves: [{ programId: 1 }],
       },
@@ -225,9 +282,7 @@ describe('SamadApiGateway', () => {
   it('skips a program with no food types', async () => {
     request.mockResolvedValueOnce({
       payload: {
-        selfWeekPrograms: [
-          [{ programId: 1, selfId: 5, daysDifferenceWithToday: 3, date: '2026-09-23T00:00:00Z', programFoodTypes: [] }],
-        ],
+        selfWeekPrograms: [[{ programId: 1, selfId: 5, daysDifferenceWithToday: 3, date: '2026-09-23T00:00:00Z', programFoodTypes: [] }]],
         userWeekReserves: [],
       },
     });
@@ -245,7 +300,15 @@ describe('SamadApiGateway', () => {
             mealTypes: [
               {
                 name: 'ناهار',
-                reserve: { id: 101, programId: 1, selfId: 5, selfCodeName: 'سلف مرکزی', foodNames: 'چلوکباب', programDate: '2026-09-22T00:00:00Z', remainedCount: 1 },
+                reserve: {
+                  id: 101,
+                  programId: 1,
+                  selfId: 5,
+                  selfCodeName: 'سلف مرکزی',
+                  foodNames: 'چلوکباب',
+                  programDate: '2026-09-22T00:00:00Z',
+                  remainedCount: 1,
+                },
               },
             ],
           },
@@ -255,7 +318,15 @@ describe('SamadApiGateway', () => {
             mealTypes: [
               {
                 name: 'ناهار',
-                reserve: { id: 102, programId: 2, selfId: 5, selfCodeName: 'سلف مرکزی', foodNames: 'قیمه', programDate: '2026-09-23T00:00:00Z', remainedCount: 1 },
+                reserve: {
+                  id: 102,
+                  programId: 2,
+                  selfId: 5,
+                  selfCodeName: 'سلف مرکزی',
+                  foodNames: 'قیمه',
+                  programDate: '2026-09-23T00:00:00Z',
+                  remainedCount: 1,
+                },
               },
             ],
           },
@@ -314,9 +385,7 @@ describe('SamadApiGateway', () => {
   it('refuses a login response with no token', async () => {
     request.mockResolvedValueOnce({ first_name: 'مهدی' });
 
-    await expect(gateway.login({ universityId: 8, samadUsername: 'u', password: 'p' })).rejects.toBeInstanceOf(
-      UpstreamRejectedError,
-    );
+    await expect(gateway.login({ universityId: 8, samadUsername: 'u', password: 'p' })).rejects.toBeInstanceOf(UpstreamRejectedError);
   });
 
   it('derives the session expiry from the token lifetime', async () => {

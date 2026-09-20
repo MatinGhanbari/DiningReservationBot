@@ -98,15 +98,7 @@ export function createContainer(): Container {
   const sessionService = new SessionService(users, sessions, gateway, secretBox, clock);
   const auth = new AuthService(users, gateway, secretBox, sessionService, clock);
   const reservations = new ReservationService(users, gateway, sessionService, clock);
-  const forgetCodeService = new ForgetCodeService(
-    forgetCodes,
-    forgetCodeReports,
-    users,
-    reservations,
-    gateway,
-    sessionService,
-    clock,
-  );
+  const forgetCodeService = new ForgetCodeService(forgetCodes, forgetCodeReports, users, reservations, gateway, sessionService, clock);
 
   // ── Presentation ──────────────────────────────────────────────────────────
 
@@ -217,10 +209,7 @@ export function createContainer(): Container {
     await bot.start();
     scheduler.start(jobs);
 
-    log.info(
-      { env: config.NODE_ENV, port: config.PORT, chatbot: isChatbotEnabled, admins: config.ADMINS.length },
-      'application started',
-    );
+    log.info({ env: config.NODE_ENV, port: config.PORT, chatbot: isChatbotEnabled, admins: config.ADMINS.length }, 'application started');
   };
 
   const shutdown = async (reason: string): Promise<void> => {

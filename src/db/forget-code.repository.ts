@@ -107,9 +107,7 @@ export class SqliteForgetCodeRepository implements ForgetCodeRepository {
     };
   }
 
-  async insert(
-    forgetCode: Omit<ForgetCode, 'id' | 'claimedByTelegramId' | 'claimedAt' | 'createdAt'>,
-  ): Promise<boolean> {
+  async insert(forgetCode: Omit<ForgetCode, 'id' | 'claimedByTelegramId' | 'claimedAt' | 'createdAt'>): Promise<boolean> {
     const result = this.statements.insert.run({
       code: forgetCode.code,
       mealDateKey: forgetCode.mealDateKey,
@@ -127,12 +125,7 @@ export class SqliteForgetCodeRepository implements ForgetCodeRepository {
     return this.statements.hasAvailable.get(universityId, selfId, mealDateKey) !== undefined;
   }
 
-  async claim(
-    universityId: number,
-    selfId: number,
-    mealDateKey: string,
-    claimedByTelegramId: number,
-  ): Promise<ForgetCode | null> {
+  async claim(universityId: number, selfId: number, mealDateKey: string, claimedByTelegramId: number): Promise<ForgetCode | null> {
     const row = this.statements.claim.get({
       universityId,
       selfId,
@@ -161,9 +154,7 @@ export class SqliteForgetCodeReportRepository implements ForgetCodeReportReposit
   private readonly insertStatement;
 
   constructor(db: SqliteDatabase) {
-    this.insertStatement = db.prepare(
-      'INSERT INTO forget_code_reports (telegram_id, code, created_at) VALUES (?, ?, ?)',
-    );
+    this.insertStatement = db.prepare('INSERT INTO forget_code_reports (telegram_id, code, created_at) VALUES (?, ?, ?)');
   }
 
   async insert(telegramId: number, code: string): Promise<void> {

@@ -2,12 +2,7 @@ import type { Logger } from 'pino';
 import { findUniversityById } from '../domain/universities';
 import { isTransientNetworkError, retry } from '../shared/async';
 import { readTextWithLimit, redactUrl } from '../shared/http';
-import {
-  InvalidCredentialsError,
-  SessionExpiredError,
-  UpstreamRejectedError,
-  UpstreamUnavailableError,
-} from '../shared/errors';
+import { InvalidCredentialsError, SessionExpiredError, UpstreamRejectedError, UpstreamUnavailableError } from '../shared/errors';
 import type { SamadEnvelope } from './types';
 
 export interface SamadHttpClientOptions {
@@ -70,11 +65,9 @@ export class SamadHttpClient {
     const university = findUniversityById(request.universityId);
 
     if (university === undefined) {
-      throw new UpstreamRejectedError(
-        `Unsupported university id: ${request.universityId}`,
-        'این دانشگاه در حال حاضر پشتیبانی نمی‌شود.',
-        { context: { universityId: request.universityId } },
-      );
+      throw new UpstreamRejectedError(`Unsupported university id: ${request.universityId}`, 'این دانشگاه در حال حاضر پشتیبانی نمی‌شود.', {
+        context: { universityId: request.universityId },
+      });
     }
 
     const url = new URL(request.path, university.baseUrl);
@@ -117,12 +110,7 @@ export class SamadHttpClient {
     });
   }
 
-  private async attempt<T>(
-    url: URL,
-    request: SamadRequest,
-    headers: Record<string, string>,
-    body: string | undefined,
-  ): Promise<T> {
+  private async attempt<T>(url: URL, request: SamadRequest, headers: Record<string, string>, body: string | undefined): Promise<T> {
     const startedAt = Date.now();
     const safeUrl = redactUrl(url);
 

@@ -60,10 +60,7 @@ export const copy = {
       blocks('برای شروع، دانشگاهت رو از منوی پایین انتخاب کن.', 'با این کار به سامانهٔ سماد همون دانشگاه وصل می‌شی.'),
 
     askUsername: (universityName: string): string =>
-      blocks(
-        `دانشگاه <b>${escapeHtml(universityName)}</b> انتخاب شد.`,
-        'حالا <b>نام کاربری سماد</b>ت رو بفرست.',
-      ),
+      blocks(`دانشگاه <b>${escapeHtml(universityName)}</b> انتخاب شد.`, 'حالا <b>نام کاربری سماد</b>ت رو بفرست.'),
 
     askPassword: (): string =>
       blocks(
@@ -77,9 +74,7 @@ export const copy = {
     welcome: (firstName: string, isNewUser: boolean): string =>
       blocks(
         `🎉 <b>${escapeHtml(firstName)}</b> جان، خوش اومدی!`,
-        isNewUser
-          ? 'حسابت وصل شد. از این به بعد رزرو غذا فقط چند تا کلیک فاصله داره.'
-          : 'حسابت دوباره وصل شد.',
+        isNewUser ? 'حسابت وصل شد. از این به بعد رزرو غذا فقط چند تا کلیک فاصله داره.' : 'حسابت دوباره وصل شد.',
         'از منوی پایین یکی از گزینه‌ها رو انتخاب کن.',
         FOOTER,
       ),
@@ -93,8 +88,7 @@ export const copy = {
 
   menu: {
     chooseOption: (): string => 'یکی از گزینه‌های زیر رو انتخاب کن.',
-    useButtons: (): string =>
-      'متوجه منظورت نشدم. لطفاً از دکمه‌های خود ربات استفاده کن تا گم نشیم.',
+    useButtons: (): string => 'متوجه منظورت نشدم. لطفاً از دکمه‌های خود ربات استفاده کن تا گم نشیم.',
   },
 
   // ── رزرو غذا ──────────────────────────────────────────────────────────────
@@ -103,8 +97,7 @@ export const copy = {
     chooseWeek: (): string => blocks('می‌خوای کدوم هفته رو ببینی؟'),
 
     loadingSelfs: (): string => '🔎 دارم لیست سلف‌ها رو می‌گیرم…',
-    chooseSelf: (weekLabel: string): string =>
-      blocks(`سلف موردنظرت رو برای <b>${escapeHtml(weekLabel)}</b> انتخاب کن.`),
+    chooseSelf: (weekLabel: string): string => blocks(`سلف موردنظرت رو برای <b>${escapeHtml(weekLabel)}</b> انتخاب کن.`),
 
     loadingMeals: (): string => '🔎 دارم منوی این سلف رو می‌گیرم…',
 
@@ -143,17 +136,13 @@ export const copy = {
       ),
 
     noSelfs: (): string =>
-      blocks(
-        'سماد برای حساب تو هیچ سلفی برنگرداند.',
-        'یعنی هنوز به هیچ سلفی تخصیص داده نشدی. با امور دانشجویی دانشکده‌ت صحبت کن.',
-      ),
+      blocks('سماد برای حساب تو هیچ سلفی برنگرداند.', 'یعنی هنوز به هیچ سلفی تخصیص داده نشدی. با امور دانشجویی دانشکده‌ت صحبت کن.'),
 
     reserved: (message: string): string => blocks(`✅ <b>رزرو شد!</b>`, escapeHtml(message)),
 
     reserveFailed: (message: string): string => blocks(`⚠️ <b>رزرو انجام نشد</b>`, escapeHtml(message)),
 
-    notEnoughCredit: (): string =>
-      'موجودی حسابت کافی نبود. می‌تونی از بخش «اطلاعات من» موجودی‌ات رو ببینی و بعد دوباره امتحان کنی.',
+    notEnoughCredit: (): string => 'موجودی حسابت کافی نبود. می‌تونی از بخش «اطلاعات من» موجودی‌ات رو ببینی و بعد دوباره امتحان کنی.',
   },
 
   // ── لیست رزروها ───────────────────────────────────────────────────────────
@@ -166,23 +155,16 @@ export const copy = {
       next: 'رزروهای هفتهٔ بعد',
     },
 
-    list: (weekLabel: string, entries: readonly string[]): string =>
-      blocks(`🍟 <b>${escapeHtml(weekLabel)}</b>`, entries.join('\n\n')),
+    list: (weekLabel: string, entries: readonly string[]): string => blocks(`🍟 <b>${escapeHtml(weekLabel)}</b>`, entries.join('\n\n')),
 
     entry: (input: { weekday: string; dateLabel: string; foodName: string; selfName: string }): string =>
       blocks(
         `<b>${escapeHtml(input.foodName)}</b>`,
-        bullet([
-          `${escapeHtml(input.weekday)} ${escapeHtml(input.dateLabel)}`,
-          escapeHtml(input.selfName),
-        ]),
+        bullet([`${escapeHtml(input.weekday)} ${escapeHtml(input.dateLabel)}`, escapeHtml(input.selfName)]),
       ),
 
     empty: (weekLabel: string): string =>
-      blocks(
-        `برای <b>${escapeHtml(weekLabel)}</b> رزروی نداری.`,
-        'می‌تونی از بخش «رزرو غذا» غذای هفتهٔ بعدت رو از حالا بگیری.',
-      ),
+      blocks(`برای <b>${escapeHtml(weekLabel)}</b> رزروی نداری.`, 'می‌تونی از بخش «رزرو غذا» غذای هفتهٔ بعدت رو از حالا بگیری.'),
   },
 
   // ── کد فراموشی ────────────────────────────────────────────────────────────
@@ -199,8 +181,7 @@ export const copy = {
         'هر کد فقط یک‌بار قابل استفاده‌ست، پس با خیال راحت به هم‌دانشگاهی‌هات کمک کن.',
       ),
 
-    chooseShareTarget: (weekLabel: string): string =>
-      blocks(`کدوم رزروت رو می‌خوای به اشتراک بذاری؟ <i>${escapeHtml(weekLabel)}</i>`),
+    chooseShareTarget: (weekLabel: string): string => blocks(`کدوم رزروت رو می‌خوای به اشتراک بذاری؟ <i>${escapeHtml(weekLabel)}</i>`),
 
     shareConfirmation: (foodName: string, weekday: string): string =>
       blocks(
@@ -220,16 +201,9 @@ export const copy = {
       ),
 
     alreadyShared: (code: string): string =>
-      blocks(
-        'این کد قبلاً توی مخزن بود، پس دوباره اضافه‌اش نکردم.',
-        `کد: <code>${escapeHtml(code)}</code>`,
-      ),
+      blocks('این کد قبلاً توی مخزن بود، پس دوباره اضافه‌اش نکردم.', `کد: <code>${escapeHtml(code)}</code>`),
 
-    nothingToShare: (): string =>
-      blocks(
-        'برای این هفته غذایی نداری که بشه کدش رو به اشتراک گذاشت.',
-        'می‌تونی هفتهٔ بعد رو چک کنی.',
-      ),
+    nothingToShare: (): string => blocks('برای این هفته غذایی نداری که بشه کدش رو به اشتراک گذاشت.', 'می‌تونی هفتهٔ بعد رو چک کنی.'),
 
     chooseSelfToReceive: (): string => 'از کدوم سلف می‌خوای غذا بخوری؟',
 
@@ -247,14 +221,9 @@ export const copy = {
         'یادت باشه بعداً تو هم برای بقیه کد بذاری.',
       ),
 
-    reportPrompt: (): string =>
-      blocks(
-        'کدی که کار نکرد رو بفرست تا بررسی کنم.',
-        'اگه ممکنه، متن خطایی که سماد داد رو هم همراهش بنویس.',
-      ),
+    reportPrompt: (): string => blocks('کدی که کار نکرد رو بفرست تا بررسی کنم.', 'اگه ممکنه، متن خطایی که سماد داد رو هم همراهش بنویس.'),
 
-    reportReceived: (): string =>
-      blocks('🙏 ممنون، ثبت شد.', 'در اولین فرصت بررسی می‌کنم و اگه لازم باشه باهات تماس می‌گیرم.'),
+    reportReceived: (): string => blocks('🙏 ممنون، ثبت شد.', 'در اولین فرصت بررسی می‌کنم و اگه لازم باشه باهات تماس می‌گیرم.'),
   },
 
   // ── رزرو خودکار ───────────────────────────────────────────────────────────
@@ -271,9 +240,7 @@ export const copy = {
       const statusLine = input.enabled ? '✅ <b>فعال</b>' : '⛔️ <b>غیرفعال</b>';
 
       const weekdayLine =
-        input.weekdays.length === 0
-          ? 'هیچ روزی انتخاب نشده'
-          : input.weekdays.map(index => weekdayByIndex(index)).join('، ');
+        input.weekdays.length === 0 ? 'هیچ روزی انتخاب نشده' : input.weekdays.map(index => weekdayByIndex(index)).join('، ');
 
       return blocks(
         '⚙️ <b>رزرو خودکار</b>',
@@ -285,9 +252,7 @@ export const copy = {
         input.enabled && input.weekdays.length === 0
           ? '⚠️ رزرو خودکار فعاله ولی هیچ روزی انتخاب نشده، پس کاری انجام نمی‌شه. از «تغییر روزها» استفاده کن.'
           : null,
-        input.enabled && input.selfName === null
-          ? '⚠️ هنوز سلفی انتخاب نکردی، پس رزرو خودکار کاری انجام نمی‌ده.'
-          : null,
+        input.enabled && input.selfName === null ? '⚠️ هنوز سلفی انتخاب نکردی، پس رزرو خودکار کاری انجام نمی‌ده.' : null,
         input.enabled && input.weekdays.length > 0 && input.selfName !== null
           ? 'هر روز صبح چک می‌کنم و به‌محض اینکه رزرو ممکن شد، خودم انجامش می‌دم و بهت خبر می‌دم.'
           : null,
@@ -295,18 +260,12 @@ export const copy = {
     },
 
     chooseSelfFirst: (): string =>
-      blocks(
-        'قبل از فعال‌سازی، باید بگی توی کدوم سلف برات رزرو کنم.',
-        'این کار جلوی رزرو تکراری و هزینهٔ اضافه رو می‌گیره.',
-      ),
+      blocks('قبل از فعال‌سازی، باید بگی توی کدوم سلف برات رزرو کنم.', 'این کار جلوی رزرو تکراری و هزینهٔ اضافه رو می‌گیره.'),
 
     selfChosen: (selfName: string): string => `سلف <b>${escapeHtml(selfName)}</b> ثبت شد.`,
 
     enabled: (): string =>
-      blocks(
-        '✅ رزرو خودکار فعال شد.',
-        'از این به بعد هر روز صبح چک می‌کنم و اگه چیزی برای رزرو باشه، خودم انجامش می‌دم و بهت خبر می‌دم.',
-      ),
+      blocks('✅ رزرو خودکار فعال شد.', 'از این به بعد هر روز صبح چک می‌کنم و اگه چیزی برای رزرو باشه، خودم انجامش می‌دم و بهت خبر می‌دم.'),
 
     disabled: (): string => blocks('⛔️ رزرو خودکار غیرفعال شد.', 'هر وقت خواستی از همین‌جا دوباره روشنش کن.'),
 
@@ -321,26 +280,19 @@ export const copy = {
     dayToggled: (weekday: string, isSelected: boolean): string =>
       isSelected ? `✅ <b>${escapeHtml(weekday)}</b> اضافه شد.` : `⛔️ <b>${escapeHtml(weekday)}</b> برداشته شد.`,
 
-    report: (input: {
-      reserved: number;
-      failed: number;
-      weekdayLabel: string;
-      failures: readonly string[];
-    }): string => {
+    report: (input: { reserved: number; failed: number; weekdayLabel: string; failures: readonly string[] }): string => {
       const headline =
-        input.reserved > 0
-          ? `✅ <b>رزرو خودکار انجام شد</b> (${escapeHtml(input.weekdayLabel)})`
-          : '⚠️ <b>رزرو خودکار به مشکل خورد</b>';
+        input.reserved > 0 ? `✅ <b>رزرو خودکار انجام شد</b> (${escapeHtml(input.weekdayLabel)})` : '⚠️ <b>رزرو خودکار به مشکل خورد</b>';
 
-      const summary = bullet([
-        input.reserved > 0 ? `${toPersianDigits(input.reserved)} وعده رزرو شد` : 'هیچ وعده‌ای رزرو نشد',
-        input.failed > 0 ? `${toPersianDigits(input.failed)} مورد ناموفق` : null,
-      ].filter((line): line is string => line !== null));
+      const summary = bullet(
+        [
+          input.reserved > 0 ? `${toPersianDigits(input.reserved)} وعده رزرو شد` : 'هیچ وعده‌ای رزرو نشد',
+          input.failed > 0 ? `${toPersianDigits(input.failed)} مورد ناموفق` : null,
+        ].filter((line): line is string => line !== null),
+      );
 
       const detail =
-        input.failures.length === 0
-          ? null
-          : blocks('<b>جزئیات ناموفق‌ها:</b>', bullet(input.failures.slice(0, 5).map(escapeHtml)));
+        input.failures.length === 0 ? null : blocks('<b>جزئیات ناموفق‌ها:</b>', bullet(input.failures.slice(0, 5).map(escapeHtml)));
 
       const advice =
         input.failed > 0
@@ -356,13 +308,7 @@ export const copy = {
   profile: {
     loading: (): string => '🔎 دارم اطلاعاتت رو می‌گیرم…',
 
-    view: (input: {
-      fullName: string;
-      universityName: string;
-      samadUsername: string;
-      creditRial: number;
-      telegramId: number;
-    }): string =>
+    view: (input: { fullName: string; universityName: string; samadUsername: string; creditRial: number; telegramId: number }): string =>
       blocks(
         '🍔 <b>اطلاعات من</b>',
         bullet([
@@ -417,20 +363,12 @@ export const copy = {
     chatbotThinking: (): string => '🤔 دارم فکر می‌کنم…',
 
     chatbotAnswer: (answer: string, remaining: number): string =>
-      blocks(
-        escapeHtml(answer),
-        remaining <= 5 ? `📌 ${toPersianDigits(remaining)} پیام از سهمیهٔ امروزت مونده.` : null,
-      ),
+      blocks(escapeHtml(answer), remaining <= 5 ? `📌 ${toPersianDigits(remaining)} پیام از سهمیهٔ امروزت مونده.` : null),
 
-    chatbotUnavailable: (): string =>
-      'چت‌بات الان فعال نیست. می‌تونی از گزینهٔ «پیام به پشتیبانی» استفاده کنی تا اپراتور جوابت رو بده.',
+    chatbotUnavailable: (): string => 'چت‌بات الان فعال نیست. می‌تونی از گزینهٔ «پیام به پشتیبانی» استفاده کنی تا اپراتور جوابت رو بده.',
 
     humanIntro: (): string =>
-      blocks(
-        '✍️ پیامت رو بنویس و بفرست.',
-        'مستقیم می‌رسه دست اپراتور و در اولین فرصت جواب می‌گیری.',
-        'می‌تونی عکس یا فایل هم بفرستی.',
-      ),
+      blocks('✍️ پیامت رو بنویس و بفرست.', 'مستقیم می‌رسه دست اپراتور و در اولین فرصت جواب می‌گیری.', 'می‌تونی عکس یا فایل هم بفرستی.'),
 
     humanSent: (ticketId: number): string =>
       blocks(
@@ -450,12 +388,14 @@ export const copy = {
     }): string =>
       blocks(
         `📮 <b>پیام پشتیبانی #${toPersianDigits(input.ticketId)}</b>${input.isNew ? ' (جدید)' : ''}`,
-        bullet([
-          `از: <b>${escapeHtml(input.displayName)}</b>`,
-          input.username === null ? null : `نام کاربری: @${escapeHtml(input.username)}`,
-          `شناسه: <code>${toPersianDigits(input.telegramId)}</code>`,
-          `تعداد پیام‌ها: ${toPersianDigits(input.messageCount)}`,
-        ].filter((line): line is string => line !== null)),
+        bullet(
+          [
+            `از: <b>${escapeHtml(input.displayName)}</b>`,
+            input.username === null ? null : `نام کاربری: @${escapeHtml(input.username)}`,
+            `شناسه: <code>${toPersianDigits(input.telegramId)}</code>`,
+            `تعداد پیام‌ها: ${toPersianDigits(input.messageCount)}`,
+          ].filter((line): line is string => line !== null),
+        ),
         '↩️ روی همین پیام ریپلای کن تا جوابت مستقیم بره برای کاربر.',
       ),
 
@@ -464,24 +404,18 @@ export const copy = {
 
     adminReply: (text: string): string => blocks('📮 <b>پاسخ پشتیبانی</b>', escapeHtml(text)),
 
-    adminReplyDelivered: (ticketId: number): string =>
-      `✅ جوابت فرستاده شد. (تیکت #${toPersianDigits(ticketId)})`,
+    adminReplyDelivered: (ticketId: number): string => `✅ جوابت فرستاده شد. (تیکت #${toPersianDigits(ticketId)})`,
 
     adminReplyUnknown: (): string =>
-      blocks(
-        'این پیام به هیچ تیکتی وصل نیست.',
-        'روی پیام‌هایی که خود ربات برایت فرستاده ریپلای کن، نه روی پیام‌های قدیمی.',
-      ),
+      blocks('این پیام به هیچ تیکتی وصل نیست.', 'روی پیام‌هایی که خود ربات برایت فرستاده ریپلای کن، نه روی پیام‌های قدیمی.'),
 
-    adminReplyFailed: (): string =>
-      'کاربر ربات رو بلاک کرده یا حسابش رو پاک کرده، پس پیام نرسید.',
+    adminReplyFailed: (): string => 'کاربر ربات رو بلاک کرده یا حسابش رو پاک کرده، پس پیام نرسید.',
 
     ticketClosed: (ticketId: number): string => `✅ تیکت #${toPersianDigits(ticketId)} بسته شد.`,
 
     ticketAlreadyClosed: (ticketId: number): string => `تیکت #${toPersianDigits(ticketId)} از قبل بسته بود.`,
 
-    closedNotice: (): string =>
-      blocks('🔒 <b>این گفت‌وگو بسته شده.</b>', 'اگه سؤال جدیدی داری، یه پیام تازه بفرست.'),
+    closedNotice: (): string => blocks('🔒 <b>این گفت‌وگو بسته شده.</b>', 'اگه سؤال جدیدی داری، یه پیام تازه بفرست.'),
   },
 
   // ── یادآوری اعتبار ────────────────────────────────────────────────────────
@@ -493,12 +427,7 @@ export const copy = {
      * The point is to leave the user enough time to top up, so it names the
      * shortfall explicitly rather than saying "your balance is low".
      */
-    reminder: (input: {
-      creditRial: number;
-      requiredRial: number;
-      shortfallRial: number;
-      meals: readonly string[];
-    }): string =>
+    reminder: (input: { creditRial: number; requiredRial: number; shortfallRial: number; meals: readonly string[] }): string =>
       blocks(
         '⚠️ <b>موجودی حسابت کافی نیست</b>',
         `برای رزرو وعده‌های پیش‌رو <b>${formatToman(input.requiredRial)}</b> لازم داری، ولی موجودی حسابت <b>${formatToman(input.creditRial)}</b>ه.`,
@@ -510,8 +439,7 @@ export const copy = {
     mealLine: (input: { weekday: string; dateLabel: string; foodName: string; priceRial: number }): string =>
       `${escapeHtml(input.weekday)} ${escapeHtml(input.dateLabel)} · ${escapeHtml(input.foodName)} · ${formatToman(input.priceRial)}`,
 
-    ok: (): string =>
-      '✅ موجودی حسابت برای رزرو وعده‌های پیش‌رو کافیه. چیزی لازم نیست انجام بدی.',
+    ok: (): string => '✅ موجودی حسابت برای رزرو وعده‌های پیش‌رو کافیه. چیزی لازم نیست انجام بدی.',
   },
 
   // ── پنل مدیریت ────────────────────────────────────────────────────────────
@@ -650,25 +578,20 @@ export const copy = {
     broadcastDone: (input: { sent: number; failed: number }): string =>
       blocks(
         '📣 <b>پیام همگانی تموم شد.</b>',
-        bullet([
-          `موفق: <b>${toPersianDigits(input.sent)}</b>`,
-          input.failed > 0 ? `ناموفق: ${toPersianDigits(input.failed)}` : null,
-        ].filter((line): line is string => line !== null)),
-        input.failed > 0
-          ? 'ناموفق‌ها معمولاً کسانی‌اند که ربات رو بلاک کردن یا حسابشون رو پاک کردن.'
-          : null,
+        bullet(
+          [`موفق: <b>${toPersianDigits(input.sent)}</b>`, input.failed > 0 ? `ناموفق: ${toPersianDigits(input.failed)}` : null].filter(
+            (line): line is string => line !== null,
+          ),
+        ),
+        input.failed > 0 ? 'ناموفق‌ها معمولاً کسانی‌اند که ربات رو بلاک کردن یا حسابشون رو پاک کردن.' : null,
       ),
 
     systemReport: (input: { lines: readonly string[] }): string => blocks('🖥️ <b>وضعیت سیستم</b>', bullet(input.lines)),
 
-    maintenanceReport: (input: { lines: readonly string[] }): string =>
-      blocks('🧹 <b>نگهداری</b>', bullet(input.lines)),
+    maintenanceReport: (input: { lines: readonly string[] }): string => blocks('🧹 <b>نگهداری</b>', bullet(input.lines)),
 
     maintenanceIntro: (): string =>
-      blocks(
-        '🧹 <b>نگهداری</b>',
-        'کارهای زیر بی‌خطرن و فقط داده‌های بی‌مصرف رو پاک می‌کنن. از منوی پایین انتخاب کن.',
-      ),
+      blocks('🧹 <b>نگهداری</b>', 'کارهای زیر بی‌خطرن و فقط داده‌های بی‌مصرف رو پاک می‌کنن. از منوی پایین انتخاب کن.'),
 
     purgeDone: (codes: number, sessions: number, conversations: number, chatbot: number): string =>
       blocks(
@@ -707,19 +630,12 @@ export const copy = {
       blocks('⚠️ یه مشکلی پیش آمد.', 'لطفاً یک‌بار دیگر امتحان کن. اگه باز هم تکرار شد، از منوی «پشتیبانی» بهم خبر بده.'),
 
     wrongCredentials: (): string =>
-      blocks(
-        '❌ <b>نام کاربری یا رمز درست نبود.</b>',
-        'دوباره امتحان کن. اگه مطمئنی درسته، از سایت سماد چک کن که حسابت قفل نشده باشه.',
-      ),
+      blocks('❌ <b>نام کاربری یا رمز درست نبود.</b>', 'دوباره امتحان کن. اگه مطمئنی درسته، از سایت سماد چک کن که حسابت قفل نشده باشه.'),
 
-    sessionExpired: (): string =>
-      blocks('🔐 <b>نشستت منقضی شد.</b>', 'برای امنیت حساب، باید یک‌بار دیگر وارد بشی.'),
+    sessionExpired: (): string => blocks('🔐 <b>نشستت منقضی شد.</b>', 'برای امنیت حساب، باید یک‌بار دیگر وارد بشی.'),
 
     upstreamUnavailable: (): string =>
-      blocks(
-        '🌐 <b>به سماد وصل نشدم.</b>',
-        'مشکل از طرف سماده، نه از حساب تو. چند دقیقه بعد یک‌بار دیگر امتحان کن.',
-      ),
+      blocks('🌐 <b>به سماد وصل نشدم.</b>', 'مشکل از طرف سماده، نه از حساب تو. چند دقیقه بعد یک‌بار دیگر امتحان کن.'),
 
     unknownUniversity: (): string => 'این دانشگاه پشتیبانی نمی‌شه. یکی از گزینه‌های منو رو انتخاب کن.',
 

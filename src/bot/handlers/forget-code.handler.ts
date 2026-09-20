@@ -74,11 +74,7 @@ export async function handleShareTarget(ctx: Context, services: BotServices, res
 
   const meal = await services.reservations.findReservedMeal(guard.telegramId, reserveId);
 
-  await replyHtml(
-    ctx,
-    copy.forgetCode.shareConfirmation(meal.foodName, meal.weekdayName),
-    shareConfirm(reserveId),
-  );
+  await replyHtml(ctx, copy.forgetCode.shareConfirmation(meal.foodName, meal.weekdayName), shareConfirm(reserveId));
 }
 
 /** Prints the code and adds it to the pool. */
@@ -170,8 +166,20 @@ async function onReportBadCode(ctx: Context, services: BotServices): Promise<voi
 }
 
 export function registerForgetCodeHandlers(bot: Telegraf, services: BotServices): void {
-  bot.hears(BTN.forgetCode, handler('forget-code-menu', ctx => onForgetCodeMenu(ctx, services)));
-  bot.hears(BTN.shareForgetCode, handler('forget-code-share', ctx => onShareForgetCode(ctx, services)));
-  bot.hears(BTN.receiveForgetCode, handler('forget-code-receive', ctx => onReceiveForgetCode(ctx, services)));
-  bot.hears(BTN.reportBadCode, handler('forget-code-report', ctx => onReportBadCode(ctx, services)));
+  bot.hears(
+    BTN.forgetCode,
+    handler('forget-code-menu', ctx => onForgetCodeMenu(ctx, services)),
+  );
+  bot.hears(
+    BTN.shareForgetCode,
+    handler('forget-code-share', ctx => onShareForgetCode(ctx, services)),
+  );
+  bot.hears(
+    BTN.receiveForgetCode,
+    handler('forget-code-receive', ctx => onReceiveForgetCode(ctx, services)),
+  );
+  bot.hears(
+    BTN.reportBadCode,
+    handler('forget-code-report', ctx => onReportBadCode(ctx, services)),
+  );
 }

@@ -1,11 +1,5 @@
 import type { ForgetCode, IssuedForgetCode } from '../domain/models';
-import type {
-  Clock,
-  ForgetCodeReportRepository,
-  ForgetCodeRepository,
-  SamadGateway,
-  UserRepository,
-} from '../domain/ports';
+import type { Clock, ForgetCodeReportRepository, ForgetCodeRepository, SamadGateway, UserRepository } from '../domain/ports';
 import { NotFoundError, UpstreamRejectedError } from '../shared/errors';
 import { toMealDateKey, todayKey } from '../shared/dates';
 import { scopedLogger } from '../shared/logger';
@@ -14,9 +8,7 @@ import type { SessionService } from './session.service';
 
 const log = scopedLogger('forget-code');
 
-export type ShareOutcome =
-  | { kind: 'shared'; issued: IssuedForgetCode }
-  | { kind: 'already-shared'; issued: IssuedForgetCode };
+export type ShareOutcome = { kind: 'shared'; issued: IssuedForgetCode } | { kind: 'already-shared'; issued: IssuedForgetCode };
 
 /**
  * The community pool of forget codes.
@@ -107,18 +99,10 @@ export class ForgetCodeService {
     const program = await this.reservations.findTodaysProgram(telegramId, selfId);
 
     if (program === null) {
-      throw new NotFoundError(
-        `No meal today at self ${selfId}`,
-        'امروز برای این سلف غذایی نداری، پس کد فراموشی به کارت نمی‌آید.',
-      );
+      throw new NotFoundError(`No meal today at self ${selfId}`, 'امروز برای این سلف غذایی نداری، پس کد فراموشی به کارت نمی‌آید.');
     }
 
-    const claimed = await this.codes.claim(
-      user.universityId,
-      selfId,
-      toMealDateKey(program.servedAt),
-      telegramId,
-    );
+    const claimed = await this.codes.claim(user.universityId, selfId, toMealDateKey(program.servedAt), telegramId);
 
     if (claimed === null) {
       throw new NotFoundError(
