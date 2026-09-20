@@ -109,6 +109,8 @@ const EnvSchema = z.object({
   // Telegram
   BOT_TOKEN: z.string().min(1, 'توکن ربات خالی است. مقدار BOT_TOKEN را از @BotFather بگیرید.'),
   ADMINS: telegramIds('[116969885]'),
+  /** Base URL of the Telegram Bot API. Override to point at a local Bot API server or a proxy; defaults to the public cloud endpoint. */
+  TELEGRAM_API_ROOT: z.string().url().default('https://api.telegram.org'),
 
   // Database
   DATABASE_PATH: z.string().min(1).default('./data/bot.db'),

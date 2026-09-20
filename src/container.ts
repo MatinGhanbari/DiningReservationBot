@@ -102,7 +102,7 @@ export function createContainer(): Container {
 
   // ── Presentation ──────────────────────────────────────────────────────────
 
-  const telegram = new Telegraf(config.BOT_TOKEN);
+  const telegram = new Telegraf(config.BOT_TOKEN, { telegram: { apiRoot: config.TELEGRAM_API_ROOT } });
   const notifier = new TelegramNotifier(telegram, config.ADMINS);
 
   const autoReserve = new AutoReserveService(users, reservations, notifier, clock);
