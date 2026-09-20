@@ -143,7 +143,7 @@ export class SamadApiGateway implements SamadGateway {
       method: 'GET',
       accessToken: query.accessToken,
       query: {
-        selectedSelfId: query.selfId,
+        selfId: query.selfId,
         weekStartDate: query.weekStart === undefined ? '' : formatSamadWeekStart(query.weekStart),
       },
     });
