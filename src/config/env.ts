@@ -143,6 +143,12 @@ const EnvSchema = z.object({
   OPENROUTER_TIMEOUT_MS: positiveInteger(30_000),
   CHATBOT_DAILY_LIMIT: positiveInteger(20),
   CHATBOT_HISTORY_TURNS: positiveInteger(8),
+  /** A question longer than this is truncated before it reaches the model: it is a cost and context budget, not a guess at how much someone can type. */
+  CHATBOT_MAX_QUESTION_CHARS: positiveInteger(500),
+  /** Cap on a stored answer, so a runaway completion cannot fill the database. */
+  CHATBOT_MAX_ANSWER_CHARS: positiveInteger(2_000),
+  /** Chatbot transcripts older than this are removed by the maintenance job. */
+  CHATBOT_RETENTION_DAYS: positiveInteger(90),
 
   // Samad upstream
   SAMAD_TIMEOUT_MS: positiveInteger(15_000),

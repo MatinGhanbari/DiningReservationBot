@@ -90,6 +90,66 @@ const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 2,
+    name: 'support-chatbot-and-credit-reminders',
+    up: db => {
+      db.exec(`
+        -- Date-only key of the last low-credit reminder, so a user is reminded
+        -- once a day rather than on every pass.
+        ALTER TABLE users ADD COLUMN credit_reminder_sent_on TEXT;
+
+        CREATE TABLE support_tickets (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          telegram_id INTEGER NOT NULL,
+          status      TEXT    NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL,
+          closed_at   INTEGER
+        );
+
+        CREATE INDEX support_tickets_open ON support_tickets (status, updated_at DESC);
+        CREATE INDEX support_tickets_user ON support_tickets (telegram_id, updated_at DESC);
+
+        CREATE TABLE support_messages (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          ticket_id  INTEGER NOT NULL REFERENCES support_tickets (id) ON DELETE CASCADE,
+          direction  TEXT    NOT NULL CHECK (direction IN ('in', 'out')),
+          content    TEXT    NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX support_messages_ticket ON support_messages (ticket_id, created_at);
+
+        -- Maps a message in an admin's chat back to its ticket. This is what
+        -- makes a reply routable without relying on Telegram's forward metadata,
+        -- which disappears when the user has forwarding restricted.
+        CREATE TABLE support_deliveries (
+          id                INTEGER PRIMARY KEY AUTOINCREMENT,
+          ticket_id         INTEGER NOT NULL REFERENCES support_tickets (id) ON DELETE CASCADE,
+          admin_telegram_id INTEGER NOT NULL,
+          message_id        INTEGER NOT NULL,
+          created_at        INTEGER NOT NULL
+        );
+
+        CREATE UNIQUE INDEX support_deliveries_lookup
+          ON support_deliveries (admin_telegram_id, message_id);
+
+        -- Every chatbot exchange, kept so admins can report on what people ask.
+        CREATE TABLE chatbot_messages (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          telegram_id INTEGER NOT NULL,
+          role        TEXT    NOT NULL CHECK (role IN ('user', 'assistant')),
+          content     TEXT    NOT NULL,
+          model       TEXT,
+          created_at  INTEGER NOT NULL
+        );
+
+        CREATE INDEX chatbot_messages_user ON chatbot_messages (telegram_id, created_at DESC);
+        CREATE INDEX chatbot_messages_recent ON chatbot_messages (created_at DESC);
+      `);
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);

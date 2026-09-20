@@ -1,4 +1,6 @@
 import type {
+  ChatRole,
+  ChatTurn,
   ForgetCode,
   IssuedForgetCode,
   MealOption,
@@ -6,6 +8,11 @@ import type {
   ReservedMeal,
   SamadSession,
   Self,
+  SupportDirection,
+  SupportEnvelope,
+  SupportMessage,
+  SupportTicket,
+  SupportTicketSummary,
   User,
   UserProfile,
   WeeklyReserves,
@@ -31,7 +38,15 @@ export interface UserRepository {
   toggleAutoReserveWeekday(telegramId: number, weekday: number): Promise<boolean>;
   /** Everyone with auto-reserve switched on, for the scheduled run. */
   findAllWithAutoReserveEnabled(): Promise<readonly User[]>;
+  /** Records that a low-credit reminder was delivered on this meal date. */
+  markCreditReminderSent(telegramId: number, mealDateKey: string): Promise<void>;
+  /** A page of users, newest first, for the admin panel. */
+  list(options: { limit: number; offset: number }): Promise<readonly User[]>;
+  /** Everyone, for a broadcast. Callers must page; this is not bounded. */
+  listAll(): Promise<readonly User[]>;
+  findBySamadUsername(samadUsername: string): Promise<User | null>;
   count(): Promise<number>;
+  countCreatedSince(since: Date): Promise<number>;
 }
 
 export interface ForgetCodeRepository {
@@ -49,6 +64,8 @@ export interface ForgetCodeRepository {
   /** Removes codes for meals that have already passed. Returns how many were deleted. */
   deleteForMealsBefore(mealDateKey: string): Promise<number>;
   countAvailable(universityId: number): Promise<number>;
+  /** Unclaimed codes across every university, for the admin overview. */
+  countAllAvailable(): Promise<number>;
 }
 
 export interface ForgetCodeReportRepository {
@@ -61,6 +78,8 @@ export interface SessionStore {
   set(telegramId: number, session: SamadSession, ttlMs: number): Promise<void>;
   delete(telegramId: number): Promise<void>;
   size(): number;
+  /** Drops expired entries and reports how many went. */
+  sweep(): number;
 }
 
 /** Encrypts and decrypts the stored Samad passwords. */
@@ -161,3 +180,111 @@ export interface Notifier {
 
 /** The slice of a reserved meal needed to describe it in a list. */
 export type ReservedMealSummary = ReservedMeal;
+
+/** Support conversations, and the mapping that routes an admin's reply back. */
+export interface SupportRepository {
+  /**
+   * Opens a ticket and records the first message in one transaction.
+   *
+   * Reuses the user's open ticket when there is one, so a back-and-forth stays a
+   * single conversation rather than a new ticket per message.
+   */
+  openTicket(envelope: SupportEnvelope): Promise<{ ticket: SupportTicket; created: boolean }>;
+  findOpenTicket(telegramId: number): Promise<SupportTicket | null>;
+  appendMessage(ticketId: number, direction: SupportDirection, content: string): Promise<void>;
+  listMessages(ticketId: number, limit: number): Promise<readonly SupportMessage[]>;
+  countMessages(ticketId: number): Promise<number>;
+  /** Remembers which message in an admin's chat belongs to which ticket. */
+  recordDelivery(ticketId: number, adminTelegramId: number, messageId: number): Promise<void>;
+  /** Resolves a reply from an admin back to its ticket, or null if unknown. */
+  findTicketByDelivery(adminTelegramId: number, messageId: number): Promise<SupportTicket | null>;
+  findById(ticketId: number): Promise<SupportTicket | null>;
+  closeTicket(ticketId: number): Promise<boolean>;
+  listOpen(limit: number): Promise<readonly SupportTicketSummary[]>;
+  countByStatus(status: 'open' | 'closed'): Promise<number>;
+  countMessagesSince(since: Date): Promise<number>;
+  lastMessageAt(): Promise<Date | null>;
+}
+
+/** Every chatbot exchange, so admins can report on what people actually ask. */
+export interface ChatbotRepository {
+  append(telegramId: number, role: ChatRole, content: string, model: string | null): Promise<void>;
+  /** The most recent turns for one user, oldest first, ready to send to the model. */
+  historyForUser(telegramId: number, limit: number): Promise<readonly ChatTurn[]>;
+  countForUserSince(telegramId: number, since: Date): Promise<number>;
+  countSince(since: Date): Promise<number>;
+  countUsersSince(since: Date): Promise<number>;
+  recent(limit: number): Promise<readonly ChatbotMessageRow[]>;
+  /** The questions people asked, most recent first, for the admin report. */
+  recentQuestions(limit: number): Promise<readonly ChatbotMessageRow[]>;
+  purgeBefore(cutoff: Date): Promise<number>;
+}
+
+export interface ChatbotMessageRow {
+  telegramId: number;
+  role: ChatRole;
+  content: string;
+  createdAt: Date;
+}
+
+/** The language model behind the support chatbot. */
+export interface AssistantGateway {
+  /** Returns the assistant's Persian answer. Throws when the upstream is unusable. */
+  answer(input: { question: string; history: readonly ChatTurn[] }): Promise<string>;
+}
+
+/**
+ * Sends messages outside a request/response cycle, and can address an arbitrary
+ * chat so support replies can be routed.
+ *
+ * Every method returns the id of the message it created, or null when delivery
+ * failed — a user who blocked the bot is an expected outcome, not an error.
+ */
+export interface SupportMessenger {
+  send(telegramId: number, html: string): Promise<number | null>;
+  /** Forwards a user's own message into another chat, preserving media. */
+  forward(targetTelegramId: number, sourceTelegramId: number, messageId: number): Promise<number | null>;
+  reply(telegramId: number, replyToMessageId: number, html: string): Promise<number | null>;
+  /** Sends a file from disk; used to hand a database backup to an admin. */
+  sendDocument(telegramId: number, filePath: string, caption: string): Promise<number | null>;
+  /** The admins who receive support traffic. */
+  adminIds(): readonly number[];
+}
+
+/** Runs a synchronous read against the database, for the readiness probe. */
+export interface HealthProbe {
+  check(): Promise<void>;
+}
+
+export interface DatabaseSize {
+  databaseBytes: number;
+  walBytes: number;
+}
+
+/** Introspection the admin panel and the health endpoint report on. */
+export interface SystemProbe {
+  size(): Promise<DatabaseSize>;
+  schemaVersion(): Promise<number>;
+  /** Writes a consistent copy of the database and returns its size in bytes. */
+  snapshot(path: string): Promise<number>;
+}
+
+export interface DatabaseSize {
+  databaseBytes: number;
+  /** The write-ahead log, which can be larger than the database between checkpoints. */
+  walBytes: number;
+}
+
+/**
+ * Reads the state of the storage layer for the admin panel.
+ *
+ * Separate from `HealthProbe` because the two answer different questions: the
+ * probe asks whether the process can serve traffic, this asks how much room the
+ * data takes and whether the schema is where it should be.
+ */
+export interface SystemProbe {
+  size(): Promise<DatabaseSize>;
+  schemaVersion(): Promise<number>;
+  /** Writes a consistent copy to `path` and returns its size in bytes. */
+  snapshot(path: string): Promise<number>;
+}

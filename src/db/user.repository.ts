@@ -12,6 +12,7 @@ interface UserRow {
   encrypted_password: string;
   auto_reserve_enabled: number;
   auto_reserve_self_id: number | null;
+  credit_reminder_sent_on: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -31,6 +32,7 @@ function toUser(row: UserRow, weekdays: readonly number[]): User {
     autoReserveEnabled: row.auto_reserve_enabled === 1,
     autoReserveSelfId: row.auto_reserve_self_id,
     autoReserveWeekdays: [...weekdays].sort((left, right) => left - right),
+    creditReminderSentOn: row.credit_reminder_sent_on,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   };
@@ -43,6 +45,8 @@ interface UserParameters {
   universityId: number;
   samadUsername: string;
   encryptedPassword: string;
+  autoReserveEnabled: number;
+  autoReserveSelfId: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -97,18 +101,37 @@ export class SqliteUserRepository implements UserRepository {
         'DELETE FROM user_auto_reserve_weekdays WHERE telegram_id = ? AND weekday = ?',
       ),
       findAllEnabled: db.prepare<[], UserRow>('SELECT * FROM users WHERE auto_reserve_enabled = 1 ORDER BY telegram_id'),
+      markCreditReminder: db.prepare<[string, number, number]>(
+        'UPDATE users SET credit_reminder_sent_on = ?, updated_at = ? WHERE telegram_id = ?',
+      ),
+      list: db.prepare<[number, number], UserRow>('SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?'),
+      listAll: db.prepare<[], UserRow>('SELECT * FROM users ORDER BY telegram_id'),
+      findBySamadUsername: db.prepare<[string], UserRow>(
+        'SELECT * FROM users WHERE samad_username = ? ORDER BY updated_at DESC LIMIT 1',
+      ),
       count: db.prepare<[], { total: number }>('SELECT COUNT(*) AS total FROM users'),
+      countCreatedSince: db.prepare<[number], { total: number }>(
+        'SELECT COUNT(*) AS total FROM users WHERE created_at >= ?',
+      ),
     };
   }
 
   async findByTelegramId(telegramId: number): Promise<User | null> {
     const row = this.statements.findById.get(telegramId);
-    if (row === undefined) {
-      return null;
-    }
+    return row === undefined ? null : this.hydrate(row);
+  }
 
-    const weekdays = this.statements.findWeekdays.all(telegramId).map(entry => entry.weekday);
-    return toUser(row, weekdays);
+  async findBySamadUsername(samadUsername: string): Promise<User | null> {
+    const row = this.statements.findBySamadUsername.get(samadUsername);
+    return row === undefined ? null : this.hydrate(row);
+  }
+
+  async list(options: { limit: number; offset: number }): Promise<readonly User[]> {
+    return this.statements.list.all(options.limit, options.offset).map(row => this.hydrate(row));
+  }
+
+  async listAll(): Promise<readonly User[]> {
+    return this.statements.listAll.all().map(row => this.hydrate(row));
   }
 
   async save(user: User): Promise<void> {
@@ -203,5 +226,19 @@ export class SqliteUserRepository implements UserRepository {
 
   async count(): Promise<number> {
     return this.statements.count.get()?.total ?? 0;
+  }
+
+  async countCreatedSince(since: Date): Promise<number> {
+    return this.statements.countCreatedSince.get(since.getTime())?.total ?? 0;
+  }
+
+  async markCreditReminderSent(telegramId: number, mealDateKey: string): Promise<void> {
+    this.statements.markCreditReminder.run(mealDateKey, Date.now(), telegramId);
+  }
+
+  /** Reads the weekday rows that live outside the users table. */
+  private hydrate(row: UserRow): User {
+    const weekdays = this.statements.findWeekdays.all(row.telegram_id).map(entry => entry.weekday);
+    return toUser(row, weekdays);
   }
 }

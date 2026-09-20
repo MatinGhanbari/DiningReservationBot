@@ -29,6 +29,60 @@ export function todayKey(now: Date = new Date()): string {
   return toMealDateKey(now);
 }
 
+const wallClockFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: config.TZ,
+  hour12: false,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+/**
+ * How far the configured timezone is ahead of UTC at a given instant.
+ *
+ * Derived from `Intl` rather than hard-coded, because the offset is a property of
+ * the zone (and of its daylight-saving rules) rather than of this application.
+ */
+function timezoneOffsetMs(instant: Date): number {
+  const parts = wallClockFormatter.formatToParts(instant);
+  const value = (type: Intl.DateTimeFormatPartTypes): number =>
+    Number(parts.find(part => part.type === type)?.value ?? '0');
+
+  const asIfUtc = Date.UTC(
+    value('year'),
+    value('month') - 1,
+    value('day'),
+    // `hour12: false` can render midnight as 24 in some engines.
+    value('hour') % 24,
+    value('minute'),
+    value('second'),
+  );
+
+  return asIfUtc - instant.getTime();
+}
+
+/**
+ * The instant midnight started, in the configured timezone.
+ *
+ * Used for anything that resets on a calendar day — the chatbot's daily
+ * allowance and the once-a-day credit reminder. A rolling 24-hour window would be
+ * simpler but reads as a bug to the user, who expects their budget to come back
+ * at the start of the day.
+ */
+export function startOfConfiguredDay(now: Date = new Date()): Date {
+  const [year, month, day] = toMealDateKey(now).split('-').map(Number);
+
+  if (year === undefined || month === undefined || day === undefined) {
+    return new Date(Number.NaN);
+  }
+
+  const utcMidnight = Date.UTC(year, month - 1, day);
+  return new Date(utcMidnight - timezoneOffsetMs(new Date(utcMidnight)));
+}
+
 /** Parses a `YYYY-MM-DD` key into a Date at local midnight. */
 export function fromMealDateKey(key: string): Date {
   const [year, month, day] = key.split('-').map(Number);

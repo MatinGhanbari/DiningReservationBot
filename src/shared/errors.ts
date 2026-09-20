@@ -13,6 +13,7 @@ export type AppErrorCode =
   | 'INVALID_CREDENTIALS'
   | 'UPSTREAM_UNAVAILABLE'
   | 'UPSTREAM_REJECTED'
+  | 'RATE_LIMITED'
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'VALIDATION'
@@ -68,14 +69,23 @@ export class InvalidCredentialsError extends AppError {
   }
 }
 
+export interface UpstreamUnavailableErrorOptions extends AppErrorOptions {
+  /** Overrides the default technical message, for upstreams other than Samad. */
+  message?: string;
+  /** Overrides the default Persian copy, so the advice matches the upstream. */
+  userMessage?: string;
+}
+
 /** Samad could not be reached, or answered too slowly. */
 export class UpstreamUnavailableError extends AppError {
-  constructor(options: AppErrorOptions = {}) {
+  constructor(options: UpstreamUnavailableErrorOptions = {}) {
+    const { message, userMessage, ...rest } = options;
+
     super(
       'UPSTREAM_UNAVAILABLE',
-      'Samad did not respond in time',
-      'الان نتوانستم به سماد وصل شوم. چند لحظه بعد یک‌بار دیگر امتحان کن.',
-      { retryable: true, ...options },
+      message ?? 'Samad did not respond in time',
+      userMessage ?? 'الان نتوانستم به سماد وصل شوم. چند لحظه بعد یک‌بار دیگر امتحان کن.',
+      { retryable: true, ...rest },
     );
   }
 }
@@ -108,6 +118,13 @@ export class ValidationError extends AppError {
 export class ForbiddenError extends AppError {
   constructor(message: string, userMessage: string, options: AppErrorOptions = {}) {
     super('FORBIDDEN', message, userMessage, options);
+  }
+}
+
+/** The caller has spent an allowance, such as the chatbot's daily message budget. */
+export class RateLimitedError extends AppError {
+  constructor(message: string, userMessage: string, options: AppErrorOptions = {}) {
+    super('RATE_LIMITED', message, userMessage, options);
   }
 }
 

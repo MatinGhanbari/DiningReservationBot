@@ -101,6 +101,9 @@ export class SqliteForgetCodeRepository implements ForgetCodeRepository {
         FROM forget_codes
         WHERE university_id = ? AND claimed_by_telegram_id IS NULL
       `),
+      countAllAvailable: db.prepare<[], { total: number }>(
+        'SELECT COUNT(*) AS total FROM forget_codes WHERE claimed_by_telegram_id IS NULL',
+      ),
     };
   }
 
@@ -147,6 +150,10 @@ export class SqliteForgetCodeRepository implements ForgetCodeRepository {
 
   async countAvailable(universityId: number): Promise<number> {
     return this.statements.countAvailable.get(universityId)?.total ?? 0;
+  }
+
+  async countAllAvailable(): Promise<number> {
+    return this.statements.countAllAvailable.get()?.total ?? 0;
   }
 }
 

@@ -34,6 +34,8 @@ export interface User {
   autoReserveSelfId: number | null;
   /** Weekdays to auto-reserve on, ۰ = شنبه through ۶ = جمعه. */
   autoReserveWeekdays: readonly number[];
+  /** Date-only key of the last low-credit reminder, or null if never reminded. */
+  creditReminderSentOn: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -151,3 +153,61 @@ export interface SamadSession {
  * named here rather than inlined so the assumption is visible and easy to revisit.
  */
 export const LUNCH_MEAL_TYPE_ID = 2;
+
+export type SupportTicketStatus = 'open' | 'closed';
+export type SupportDirection = 'in' | 'out';
+
+/** A support conversation between one user and the admins. */
+export interface SupportTicket {
+  id: number;
+  telegramId: number;
+  status: SupportTicketStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  closedAt: Date | null;
+}
+
+/** A ticket with the counts and preview an admin list needs. */
+export interface SupportTicketSummary extends SupportTicket {
+  /** The user's name as recorded in the bot, or a placeholder when unknown. */
+  displayName: string;
+  messageCount: number;
+  lastMessage: string;
+}
+
+export interface SupportMessage {
+  id: number;
+  ticketId: number;
+  direction: SupportDirection;
+  content: string;
+  createdAt: Date;
+}
+
+export type ChatRole = 'user' | 'assistant';
+
+/** One stored chatbot exchange. */
+export interface ChatbotMessage {
+  id: number;
+  telegramId: number;
+  role: ChatRole;
+  content: string;
+  model: string | null;
+  createdAt: Date;
+}
+
+/** A single turn handed to the language model. */
+export interface ChatTurn {
+  role: ChatRole;
+  content: string;
+}
+
+/** A message the bot forwards to admins on a user's behalf. */
+export interface SupportEnvelope {
+  telegramId: number;
+  displayName: string;
+  username: string | null;
+  /** Telegram's id for the message, used to forward it verbatim. */
+  messageId: number;
+  /** Text or caption; a placeholder for media, which has no text of its own. */
+  content: string;
+}
