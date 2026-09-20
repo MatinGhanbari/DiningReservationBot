@@ -6,22 +6,50 @@ import { config, isProduction } from '../config/env';
  *
  * Secrets must never reach the log files, so redaction is configured centrally
  * rather than relying on every call site to remember. This matters here because
- * user passwords and Samad access tokens flow through the request path.
+ * user passwords, Samad access tokens and the OpenRouter key all flow through the
+ * request path.
+ *
+ * The list below is intentionally broader than the fields that exist today. A
+ * request object is logged whole in several places, and anything nested inside it
+ * — a header, a form body, a query string — is one refactor away from carrying a
+ * credential. Whole request-shaped fields are therefore redacted rather than
+ * enumerated.
  */
 const redactPaths = [
+  // Credentials by name, wherever they appear.
   'password',
   '*.password',
-  'encryptedPassword',
   '*.encryptedPassword',
+  'encryptedPassword',
   'accessToken',
   '*.accessToken',
+  'refreshToken',
+  '*.refreshToken',
   'token',
   '*.token',
+  'secret',
+  '*.secret',
+  'apiKey',
+  '*.apiKey',
+  'key',
+  '*.key',
+  // Whole structures that are never worth logging and always risky.
+  'headers',
+  '*.headers',
+  'extraHeaders',
+  '*.extraHeaders',
+  'formBody',
+  '*.formBody',
+  'jsonBody',
+  '*.jsonBody',
+  'query',
+  '*.query',
   'authorization',
   '*.authorization',
-  'headers.authorization',
+  // Environment secrets, in case a snapshot of the environment is ever logged.
   'BOT_TOKEN',
   'ENCRYPTION_KEY',
+  'OPENROUTER_API_KEY',
 ];
 
 export const logger: Logger = pino({

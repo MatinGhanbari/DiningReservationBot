@@ -1,6 +1,7 @@
 import type { Logger } from 'pino';
 import { findUniversityById } from '../domain/universities';
 import { isTransientNetworkError, retry } from '../shared/async';
+import { readTextWithLimit, redactUrl } from '../shared/http';
 import {
   InvalidCredentialsError,
   SessionExpiredError,
@@ -123,54 +124,57 @@ export class SamadHttpClient {
     body: string | undefined,
   ): Promise<T> {
     const startedAt = Date.now();
+    const safeUrl = redactUrl(url);
+
     let response: Response;
 
     try {
-      // AbortSignal.timeout cancels the request itself, so a hung socket is
-      // released instead of merely being ignored by an impatient caller.
       response = await fetch(url, {
         method: request.method,
         headers,
         body,
         signal: AbortSignal.timeout(this.options.timeoutMs),
+        // A 3xx to another host would otherwise carry the bearer token with it.
+        // Samad's API does not redirect, so a redirect is an error, not a
+        // navigation to follow.
+        redirect: 'manual',
       });
     } catch (error) {
       throw new UpstreamUnavailableError({
         cause: error,
-        context: { url: url.toString(), method: request.method },
+        context: { url: safeUrl, method: request.method },
       });
     }
 
     const durationMs = Date.now() - startedAt;
 
+    if (response.status >= 300 && response.status < 400) {
+      throw new UpstreamUnavailableError({ context: { status: response.status, url: safeUrl } });
+    }
+
     if (response.status === 401 || response.status === 403) {
-      this.options.logger.warn(
-        { status: response.status, path: request.path, durationMs },
-        'Samad rejected the credentials',
-      );
+      this.options.logger.warn({ status: response.status, path: request.path, durationMs }, 'Samad rejected the credentials');
 
       if (request.onUnauthorized === 'invalid-credentials') {
-        throw new InvalidCredentialsError({ context: { url: url.toString() } });
+        throw new InvalidCredentialsError({ context: { url: safeUrl } });
       }
 
-      throw new SessionExpiredError({ context: { url: url.toString() } });
+      throw new SessionExpiredError({ context: { url: safeUrl } });
     }
 
     if (response.status >= 500) {
-      throw new UpstreamUnavailableError({
-        context: { status: response.status, url: url.toString(), durationMs },
-      });
+      throw new UpstreamUnavailableError({ context: { status: response.status, url: safeUrl, durationMs } });
     }
 
-    const rawText = await response.text();
-    const payload = this.parsePayload(rawText, url);
+    const rawText = await readTextWithLimit(response);
+    const payload = this.parsePayload(rawText, safeUrl);
 
     if (!response.ok) {
       const upstreamMessage = extractUpstreamMessage(payload);
       throw new UpstreamRejectedError(
         `Samad responded ${response.status} for ${request.path}`,
         upstreamMessage ?? 'سماد این درخواست را نپذیرفت. لطفاً یک‌بار دیگر امتحان کن.',
-        { context: { status: response.status, url: url.toString() } },
+        { context: { status: response.status, url: safeUrl } },
       );
     }
 
@@ -182,8 +186,11 @@ export class SamadHttpClient {
   /**
    * Parses a response body, tolerating the two shapes Samad produces on failure:
    * an HTML error page from the reverse proxy, and an empty body.
+   *
+   * The body is never echoed into the log. An error page from a proxy can contain
+   * the request that caused it, which for this client means credentials.
    */
-  private parsePayload(rawText: string, url: URL): unknown {
+  private parsePayload(rawText: string, safeUrl: string): unknown {
     if (rawText.trim().length === 0) {
       return {};
     }
@@ -193,7 +200,7 @@ export class SamadHttpClient {
     } catch (error) {
       throw new UpstreamUnavailableError({
         cause: error,
-        context: { url: url.toString(), bodyPreview: rawText.slice(0, 200) },
+        context: { url: safeUrl, bodyLength: rawText.length },
       });
     }
   }

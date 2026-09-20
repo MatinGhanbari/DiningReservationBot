@@ -122,10 +122,13 @@ export class HealthServer {
           ...report.details,
         });
       } catch (error) {
-        this.respond(response, 503, {
-          status: 'degraded',
-          reason: error instanceof Error ? error.message : String(error),
-        });
+        // The reason is logged, not returned. An internal error message can carry
+        // a SQL fragment, a file path or a connection string, and a readiness
+        // endpoint is not a place to hand those out — the detail belongs in the
+        // log where it is already visible to whoever operates this.
+        log.error({ err: error }, 'readiness check failed');
+
+        this.respond(response, 503, { status: 'degraded', reason: 'dependency unavailable' });
       }
       return;
     }
@@ -140,6 +143,9 @@ export class HealthServer {
       'content-type': 'application/json; charset=utf-8',
       'content-length': Buffer.byteLength(payload),
       'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+      'referrer-policy': 'no-referrer',
     });
 
     response.end(payload);
