@@ -87,17 +87,19 @@ jobs:
         run: |
           # A second pass that does not depend on gitleaks: private keys and
           # Telegram-shaped tokens have unmistakable shapes.
+          #
+          # `.env` is skipped on purpose. It is gitignored and holds the
+          # developer's own token, so failing on it would make this useless to
+          # run locally; the check is about what would be committed.
           status=0
 
-          if grep -rIl --exclude-dir=node_modules --exclude-dir=.git \
-               -e 'BEGIN [A-Z ]*PRIVATE KEY' . ; then
+          if grep -rIl --exclude-dir=node_modules --exclude-dir=.git -e 'BEGIN [A-Z ]*PRIVATE KEY' . ; then
             echo "::error::A private key appears in the working tree."
             status=1
           fi
 
-          if grep -rIn --exclude-dir=node_modules --exclude-dir=.git \
-               --exclude='.env.example' --exclude='.gitleaks.toml' \
-               --exclude-dir='.github' \
+          if grep -rIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github \
+               --exclude='.env' --exclude='.env.*' --exclude='.gitleaks.toml' \
                -E '[0-9]{8,10}:[A-Za-z0-9_-]{35}' . ; then
             echo "::error::Something shaped like a Telegram bot token was found."
             status=1
