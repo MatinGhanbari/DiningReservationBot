@@ -152,6 +152,13 @@ const EnvSchema = z.object({
   // Samad upstream
   SAMAD_TIMEOUT_MS: positiveInteger(15_000),
   SAMAD_MAX_RETRIES: integer(2),
+  /**
+   * Whether to verify Samad's TLS certificate chain. Leave on unless Samad's
+   * host serves an incomplete chain that Node cannot validate (browsers fetch
+   * the missing intermediate, Node does not). Disabling weakens transport
+   * security for Samad traffic and should be a last resort.
+   */
+  SAMAD_TLS_VERIFY: booleanFlag(true),
 
   // Health server
   PORT: z.coerce.number().int().min(0).max(65_535).default(3_000),

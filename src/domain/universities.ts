@@ -15,6 +15,12 @@ export interface University {
 }
 
 export const UNIVERSITIES: readonly University[] = [
+   {
+    id: 15,
+    name: 'دانشگاه علم و صنعت ایران',
+    shortName: 'علم و صنعت',
+    baseUrl: 'https://stu.iust.ac.ir',
+  },
   {
     id: 8,
     name: 'دانشگاه صنعتی خواجه نصیرالدین طوسی',
