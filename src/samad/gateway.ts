@@ -121,7 +121,7 @@ export class SamadApiGateway implements SamadGateway {
   async listSelfs(universityId: number, accessToken: string): Promise<readonly Self[]> {
     const response = await this.http.request<SamadSelfListResponse>({
       universityId,
-      path: '/rest/selfs',
+      path: '/rest/reservations/selfs',
       method: 'GET',
       accessToken,
     });

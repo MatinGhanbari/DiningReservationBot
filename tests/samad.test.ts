@@ -30,7 +30,7 @@ describe('SamadHttpClient', () => {
 
     const result = await createClient().request<{ payload: unknown[] }>({
       universityId: 8,
-      path: '/rest/selfs',
+      path: '/rest/reservations/selfs',
       method: 'GET',
     });
 
@@ -44,9 +44,37 @@ describe('SamadHttpClient', () => {
       vi.fn(async () => jsonResponse({}, 401)),
     );
 
-    await expect(createClient().request({ universityId: 8, path: '/rest/selfs', method: 'GET', accessToken: 'x' })).rejects.toBeInstanceOf(
+    await expect(createClient().request({ universityId: 8, path: '/rest/reservations/selfs', method: 'GET', accessToken: 'x' })).rejects.toBeInstanceOf(
       SessionExpiredError,
     );
+
+    vi.unstubAllGlobals();
+  });
+
+  it('passes no custom dispatcher when TLS verification is enabled', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ payload: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createClient().request({ universityId: 8, path: '/rest/reservations/selfs', method: 'GET' });
+
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.dispatcher).toBeUndefined();
+
+    vi.unstubAllGlobals();
+  });
+
+  it('passes an insecure dispatcher when TLS verification is disabled', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ payload: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await new SamadHttpClient({ timeoutMs: 1_000, maxRetries: 2, logger: silentLogger, verifyTls: false }).request({
+      universityId: 8,
+      path: '/rest/reservations/selfs',
+      method: 'GET',
+    });
+
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.dispatcher).toBeDefined();
 
     vi.unstubAllGlobals();
   });
@@ -81,7 +109,7 @@ describe('SamadHttpClient', () => {
 
     const result = await createClient().request<{ payload: string }>({
       universityId: 8,
-      path: '/rest/selfs',
+      path: '/rest/reservations/selfs',
       method: 'GET',
     });
 
@@ -118,7 +146,7 @@ describe('SamadHttpClient', () => {
       vi.fn(async () => new Response('<html>502 Bad Gateway</html>', { status: 200 })),
     );
 
-    await expect(createClient(0).request({ universityId: 8, path: '/rest/selfs', method: 'GET' })).rejects.toThrow();
+    await expect(createClient(0).request({ universityId: 8, path: '/rest/reservations/selfs', method: 'GET' })).rejects.toThrow();
 
     vi.unstubAllGlobals();
   });
@@ -127,7 +155,7 @@ describe('SamadHttpClient', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(createClient(0).request({ universityId: 999, path: '/rest/selfs', method: 'GET' })).rejects.toBeInstanceOf(
+    await expect(createClient(0).request({ universityId: 999, path: '/rest/reservations/selfs', method: 'GET' })).rejects.toBeInstanceOf(
       UpstreamRejectedError,
     );
 
