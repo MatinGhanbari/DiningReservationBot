@@ -3,6 +3,7 @@ import type { AutoReserveService } from '../app/auto-reserve.service';
 import type { AuthService } from '../app/auth.service';
 import type { ChatbotService } from '../app/chatbot.service';
 import type { CreditWatchService } from '../app/credit-watch.service';
+import type { FeatureService } from '../app/feature.service';
 import type { ForgetCodeService } from '../app/forget-code.service';
 import type { ReservationService } from '../app/reservation.service';
 import type { SupportService } from '../app/support.service';
@@ -24,6 +25,7 @@ export interface BotServices {
   support: SupportService;
   chatbot: ChatbotService;
   admin: AdminService;
+  features: FeatureService;
   messenger: SupportMessenger;
   conversations: ConversationStore;
   clock: Clock;

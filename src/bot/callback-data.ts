@@ -1,3 +1,4 @@
+import { isFeatureKey, type FeatureKey } from '../domain/features';
 import type { WeekSelection } from '../app/reservation.service';
 
 /**
@@ -34,6 +35,7 @@ export type CallbackAction =
   | { kind: 'admin-close-ticket'; ticketId: number }
   | { kind: 'admin-broadcast-send' }
   | { kind: 'admin-broadcast-cancel' }
+  | { kind: 'admin-toggle-feature'; feature: FeatureKey }
   | { kind: 'admin-purge' };
 
 const WEEK_CODES: Record<WeekSelection, string> = { current: 'c', next: 'n' };
@@ -98,6 +100,8 @@ export function encodeCallback(action: CallbackAction): string {
       return 'x:b:y';
     case 'admin-broadcast-cancel':
       return 'x:b:n';
+    case 'admin-toggle-feature':
+      return `x:f:${action.feature}`;
     case 'admin-purge':
       return 'x:p:y';
   }
@@ -201,6 +205,9 @@ export function decodeCallback(data: string): CallbackAction | null {
       }
       if (first === 'p') {
         return second === 'y' ? { kind: 'admin-purge' } : null;
+      }
+      if (first === 'f') {
+        return second !== undefined && isFeatureKey(second) ? { kind: 'admin-toggle-feature', feature: second } : null;
       }
       return null;
     }

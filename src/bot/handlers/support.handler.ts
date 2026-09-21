@@ -2,27 +2,28 @@ import type { Context, MiddlewareFn, Telegraf } from 'telegraf';
 import { isAdmin } from '../../config/env';
 import { copy } from '../../copy/fa';
 import { isMenuButton, BTN, backMenu, supportMenu } from '../keyboards';
-import { messageTextOf, telegramIdOf } from '../guards';
+import { messageTextOf, requireFeature, telegramIdOf } from '../guards';
 import { handler, replyHtml, tryReplyHtml, withTyping } from '../reply';
 import { clampToLine, clampText } from '../../shared/sanitize';
 import type { BotServices } from '../services';
 
-/** A support message is stored and forwarded; it is not an essay. */
 export const MAX_SUPPORT_MESSAGE_CHARS = 2_000;
 
-/**
- * Support: the chatbot and the line to a human.
- *
- * Both paths are entered from the same submenu, and both end by clearing the
- * conversation state, so a message is never left half-claimed by a flow the user
- * has moved on from.
- */
-
 async function onSupportMenu(ctx: Context, services: BotServices): Promise<void> {
-  await replyHtml(ctx, copy.support.menuIntro(services.chatbot.available), supportMenu(services.chatbot.available));
+  if (!(await requireFeature(ctx, services, 'support', backMenu()))) {
+    return;
+  }
+
+  const hasChatbot = services.chatbot.available && (await services.features.isEnabled('chatbot'));
+
+  await replyHtml(ctx, copy.support.menuIntro(hasChatbot), supportMenu(hasChatbot));
 }
 
 async function onChatbot(ctx: Context, services: BotServices): Promise<void> {
+  if (!(await requireFeature(ctx, services, 'chatbot', backMenu()))) {
+    return;
+  }
+
   const telegramId = telegramIdOf(ctx);
 
   if (telegramId === null) {
@@ -41,6 +42,10 @@ async function onChatbot(ctx: Context, services: BotServices): Promise<void> {
 }
 
 async function onHumanSupport(ctx: Context, services: BotServices): Promise<void> {
+  if (!(await requireFeature(ctx, services, 'support', backMenu()))) {
+    return;
+  }
+
   const telegramId = telegramIdOf(ctx);
 
   if (telegramId === null) {
@@ -52,25 +57,18 @@ async function onHumanSupport(ctx: Context, services: BotServices): Promise<void
 }
 
 async function askChatbot(ctx: Context, services: BotServices, telegramId: number, question: string): Promise<void> {
+  if (!(await requireFeature(ctx, services, 'chatbot', backMenu()))) {
+    return;
+  }
+
   await services.conversations.clear(telegramId);
   await tryReplyHtml(ctx, copy.support.chatbotThinking());
 
-  // The language model is the slowest thing this bot talks to, and the one place
-  // where a single chat action is guaranteed to expire before the answer lands:
-  // a free model that has to be retried once can take the better part of a
-  // minute. `withTyping` holds the indicator on for the whole call.
   const answer = await withTyping(ctx, () => services.chatbot.ask(telegramId, question));
 
   await replyHtml(ctx, copy.support.chatbotAnswer(answer.answer, answer.limit - answer.used), supportMenu(services.chatbot.available));
 }
 
-/**
- * Relays one message to the admins.
- *
- * A linked account is not required: someone who cannot log in is exactly the
- * person most likely to need support, so the envelope carries whatever identity
- * Telegram gave us and the bot fills in the rest.
- */
 async function relayToAdmins(ctx: Context, services: BotServices, telegramId: number): Promise<void> {
   await services.conversations.clear(telegramId);
 
@@ -101,13 +99,6 @@ interface ExtractedMessage {
   content: string;
 }
 
-/**
- * The text of a message, or a marker for the media kinds we forward but cannot
- * read.
- *
- * The marker is what the admin sees in the stored transcript when forwarding
- * fails, so it has to say something useful rather than being empty.
- */
 function extractMessage(ctx: Context): ExtractedMessage | null {
   const message = ctx.message;
 
@@ -117,9 +108,6 @@ function extractMessage(ctx: Context): ExtractedMessage | null {
 
   const messageId = message.message_id;
 
-  // Text is clamped and stripped of invisible characters on the way in: it is
-  // stored, shown to an admin and forwarded, and a name or caption from outside
-  // is not something to reproduce verbatim.
   if ('text' in message && typeof message.text === 'string') {
     return { messageId, content: clampText(message.text, MAX_SUPPORT_MESSAGE_CHARS) };
   }
@@ -156,14 +144,6 @@ function extractMessage(ctx: Context): ExtractedMessage | null {
   return { messageId, content: '[پیام بدون متن]' };
 }
 
-/**
- * Turns an admin's reply into a message to the user.
- *
- * Registered before the wizard so a reply is never mistaken for an answer to a
- * half-finished flow. It only claims the update when the replied-to message is
- * one the bot itself placed in that admin's chat, and it steps aside entirely
- * while the admin has a flow of their own in progress.
- */
 export function createAdminReplyInterceptor(services: BotServices): MiddlewareFn<Context> {
   return async (ctx, next) => {
     const telegramId = telegramIdOf(ctx);
@@ -176,8 +156,6 @@ export function createAdminReplyInterceptor(services: BotServices): MiddlewareFn
 
     const message = ctx.message;
 
-    // `reply_to_message` only exists on the message kinds that carry content, so
-    // this narrows the union before the property is read.
     if (message === undefined || !('reply_to_message' in message) || isMenuButton(text)) {
       await next();
       return;
@@ -202,8 +180,6 @@ export function createAdminReplyInterceptor(services: BotServices): MiddlewareFn
     });
 
     if (outcome === 'unknown-ticket') {
-      // Replying to something the bot did not place in this chat. Saying so is
-      // the only way the admin learns that nothing was sent.
       await replyHtml(ctx, copy.support.adminReplyUnknown());
       return;
     }

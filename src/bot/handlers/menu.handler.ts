@@ -1,19 +1,11 @@
 import type { Context, Telegraf } from 'telegraf';
 import { isAdmin } from '../../config/env';
+import { samadSettings } from '../../config/appsettings';
 import { copy } from '../../copy/fa';
-import { telegramIdOf } from '../guards';
-import { BTN, backMenu, mainMenu } from '../keyboards';
+import { requireFeature, telegramIdOf } from '../guards';
+import { BTN, backMenu, mainMenu, samadOpen } from '../keyboards';
 import { handler, replyHtml, replyUnknownInput } from '../reply';
 import type { BotServices } from '../services';
-
-/**
- * The screens that are just a message: the main menu, about and help.
- *
- * Also owns the fallback. The original bot answered every unrecognised message
- * with «متوجه منظورت نشدم»، including messages it had actually just asked for.
- * Here the fallback is only reached when nothing else claimed the update, so an
- * unexpected message gets guidance instead of a complaint.
- */
 
 async function onBack(ctx: Context, services: BotServices): Promise<void> {
   const telegramId = telegramIdOf(ctx);
@@ -25,6 +17,29 @@ async function onBack(ctx: Context, services: BotServices): Promise<void> {
   await replyHtml(ctx, copy.menu.chooseOption(), mainMenu(telegramId !== null && isAdmin(telegramId)));
 }
 
+async function onAbout(ctx: Context, services: BotServices): Promise<void> {
+  if (!(await requireFeature(ctx, services, 'about', backMenu()))) {
+    return;
+  }
+
+  await replyHtml(ctx, copy.about(), backMenu());
+}
+
+async function onSamadSite(ctx: Context, services: BotServices): Promise<void> {
+  if (!(await requireFeature(ctx, services, 'samadSite', backMenu()))) {
+    return;
+  }
+
+  const url = samadSettings.origins.web.trim();
+
+  if (url.length === 0) {
+    await replyHtml(ctx, copy.samad.notConfigured(), backMenu());
+    return;
+  }
+
+  await replyHtml(ctx, copy.samad.menu(), samadOpen(url));
+}
+
 export function registerMenuHandlers(bot: Telegraf, services: BotServices): void {
   bot.hears(
     BTN.back,
@@ -32,10 +47,13 @@ export function registerMenuHandlers(bot: Telegraf, services: BotServices): void
   );
   bot.hears(
     BTN.about,
-    handler('about', ctx => replyHtml(ctx, copy.about(), backMenu())),
+    handler('about', ctx => onAbout(ctx, services)),
+  );
+  bot.hears(
+    BTN.samadSite,
+    handler('samad-site', ctx => onSamadSite(ctx, services)),
   );
 
-  // Registered last, so it only runs when nothing above matched.
   bot.on(
     'message',
     handler('fallback', ctx => replyUnknownInput(ctx)),

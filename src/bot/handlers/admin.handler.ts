@@ -1,6 +1,7 @@
 import type { Context, Telegraf } from 'telegraf';
 import { config } from '../../config/env';
 import { copy } from '../../copy/fa';
+import type { FeatureKey } from '../../domain/features';
 import type { User } from '../../domain/models';
 import { findUniversityById } from '../../domain/universities';
 import { startOfConfiguredDay } from '../../shared/dates';
@@ -13,6 +14,7 @@ import {
   adminSubMenu,
   adminUserPicker,
   broadcastConfirm,
+  featureToggles,
   logoutConfirm,
   purgeConfirm,
   ticketList,
@@ -343,6 +345,31 @@ async function onChatbotReport(ctx: Context, services: BotServices): Promise<voi
   );
 }
 
+async function onFeatures(ctx: Context, services: BotServices): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const states = await services.features.list();
+
+  await replyHtml(
+    ctx,
+    copy.admin.featuresReport(states.map(state => copy.admin.featureRow(copy.features.name(state.key), state.enabled))),
+    featureToggles(states.map(state => ({ key: state.key, name: copy.features.name(state.key), enabled: state.enabled }))),
+  );
+}
+
+export async function onToggleFeature(ctx: Context, services: BotServices, key: FeatureKey): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const enabled = await services.features.isEnabled(key);
+
+  await services.features.setEnabled(key, !enabled);
+  await onFeatures(ctx, services);
+}
+
 async function onBroadcast(ctx: Context, services: BotServices): Promise<void> {
   const adminId = await requireAdmin(ctx);
 
@@ -485,6 +512,10 @@ export function registerAdminHandlers(bot: Telegraf, services: BotServices): voi
   bot.hears(
     BTN.adminChatbot,
     handler('admin-chatbot', ctx => onChatbotReport(ctx, services)),
+  );
+  bot.hears(
+    BTN.adminFeatures,
+    handler('admin-features', ctx => onFeatures(ctx, services)),
   );
   bot.hears(
     BTN.adminBroadcast,

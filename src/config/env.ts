@@ -162,6 +162,19 @@ const EnvSchema = z.object({
    */
   SAMAD_TLS_VERIFY: booleanFlag(true),
 
+  // Text catalog
+  /**
+   * Which language the bot speaks. Only `fa` is bundled today; adding a locale
+   * means dropping `<locale>.json` next to the other catalogs, not touching code.
+   */
+  LOCALE: z.string().min(1).default('fa'),
+  /**
+   * Where the editable text catalog lives. Empty means "next to the database",
+   * which keeps it inside the writable volume in the container, so texts can be
+   * changed on a running deployment without rebuilding or restarting.
+   */
+  LOCALES_DIR: z.string().default(''),
+
   // Health server
   PORT: z.coerce.number().int().min(0).max(65_535).default(3_000),
 

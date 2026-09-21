@@ -150,6 +150,23 @@ const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 3,
+    name: 'feature-flags',
+    up: db => {
+      db.exec(`
+        -- Only switched-off features are written here, so the absence of a row
+        -- means "on". That keeps a newly added feature enabled without a
+        -- backfill, and makes the table a record of deliberate decisions
+        -- rather than a mirror of the code.
+        CREATE TABLE feature_flags (
+          key        TEXT    PRIMARY KEY,
+          enabled    INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+          updated_at INTEGER NOT NULL
+        );
+      `);
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);

@@ -1,3 +1,4 @@
+import type { FeatureKey, FeatureState } from './features';
 import type {
   ChatRole,
   ChatTurn,
@@ -251,6 +252,18 @@ export interface SupportMessenger {
 /** Runs a synchronous read against the database, for the readiness probe. */
 export interface HealthProbe {
   check(): Promise<void>;
+}
+
+/**
+ * Which bot capabilities an operator has switched off.
+ *
+ * Only switched-off features are stored, so a feature that has never been
+ * touched is on — which is what makes adding one a code change with no
+ * migration and no backfill.
+ */
+export interface FeatureRepository {
+  all(): Promise<readonly FeatureState[]>;
+  set(key: FeatureKey, enabled: boolean): Promise<void>;
 }
 
 export interface DatabaseSize {

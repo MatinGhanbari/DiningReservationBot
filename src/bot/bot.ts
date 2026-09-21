@@ -10,6 +10,7 @@ import {
   onLogoutPrompt,
   onPurge,
   onShowUser,
+  onToggleFeature,
   registerAdminHandlers,
 } from './handlers/admin.handler';
 import { registerAutoReserveHandlers, handleDayToggle, handleSelfChoice } from './handlers/auto-reserve.handler';
@@ -180,6 +181,9 @@ export class TelegramBot {
         return;
       case 'admin-broadcast-cancel':
         await onBroadcastCancel(ctx, services);
+        return;
+      case 'admin-toggle-feature':
+        await onToggleFeature(ctx, services, action.feature);
         return;
       case 'admin-purge':
         await onPurge(ctx, services);

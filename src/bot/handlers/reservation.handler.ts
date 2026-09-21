@@ -1,20 +1,17 @@
 import type { Context, Telegraf } from 'telegraf';
 import type { WeekSelection } from '../../app/reservation.service';
 import { copy } from '../../copy/fa';
-import { requireLogin } from '../guards';
+import { requireFeature, requireLogin } from '../guards';
 import { BTN, backMenu, mealPicker, selfPicker, weekPicker } from '../keyboards';
 import { formatMealList, formatReserves, weekLabel } from '../formatters';
 import { handler, replyHtml, tryReplyHtml, withTyping } from '../reply';
 import type { BotServices } from '../services';
 
-/**
- * Browsing menus and booking meals.
- *
- * Every step answers the question "what now?" — the original bot ended several
- * flows by simply going quiet, which left people tapping a dead button.
- */
-
 async function onChooseWeekForReservation(ctx: Context, services: BotServices): Promise<void> {
+  if (!(await requireFeature(ctx, services, 'reserve', backMenu()))) {
+    return;
+  }
+
   const guard = await requireLogin(ctx, services);
 
   if (guard === null) {
@@ -24,8 +21,11 @@ async function onChooseWeekForReservation(ctx: Context, services: BotServices): 
   await replyHtml(ctx, copy.reservation.chooseWeek(), weekPicker());
 }
 
-/** Shows the dining halls for a week, then the menu of the one that was picked. */
 export async function handleSelfSelection(ctx: Context, services: BotServices, week: WeekSelection, selfId: number): Promise<void> {
+  if (!(await requireFeature(ctx, services, 'reserve', backMenu()))) {
+    return;
+  }
+
   const guard = await requireLogin(ctx, services);
 
   if (guard === null) {
@@ -48,7 +48,6 @@ export async function handleSelfSelection(ctx: Context, services: BotServices, w
   await replyHtml(ctx, formatMealList({ selfName, weekLabel: weekLabel(week), meals }), mealPicker(meals));
 }
 
-/** Books one meal and reports exactly what Samad said. */
 export async function handleReserveMeal(
   ctx: Context,
   services: BotServices,
@@ -56,18 +55,18 @@ export async function handleReserveMeal(
   foodTypeId: number,
   mealTypeId: number,
 ): Promise<void> {
+  if (!(await requireFeature(ctx, services, 'reserve', backMenu()))) {
+    return;
+  }
+
   const guard = await requireLogin(ctx, services);
 
   if (guard === null) {
     return;
   }
 
-  // Booking is the one write in this flow, so the indicator stays on until Samad
-  // has actually answered rather than until the request was sent.
   const outcome = await withTyping(ctx, () => services.reservations.reserve(guard.telegramId, programId, foodTypeId, mealTypeId));
 
-  // Samad's own explanation is shown rather than a generic message: it already
-  // says whether the problem is credit, capacity, or timing.
   await replyHtml(
     ctx,
     outcome.succeeded ? copy.reservation.reserved(outcome.message) : copy.reservation.reserveFailed(outcome.message),
@@ -75,8 +74,11 @@ export async function handleReserveMeal(
   );
 }
 
-/** Shows the reservations already made for a week. */
 export async function handleShowReserves(ctx: Context, services: BotServices, week: WeekSelection): Promise<void> {
+  if (!(await requireFeature(ctx, services, 'reserves', backMenu()))) {
+    return;
+  }
+
   const guard = await requireLogin(ctx, services);
 
   if (guard === null) {
@@ -97,6 +99,10 @@ export async function handleShowReserves(ctx: Context, services: BotServices, we
 }
 
 async function onShowSelfsForReservation(ctx: Context, services: BotServices, week: WeekSelection): Promise<void> {
+  if (!(await requireFeature(ctx, services, 'reserve', backMenu()))) {
+    return;
+  }
+
   const guard = await requireLogin(ctx, services);
 
   if (guard === null) {
@@ -130,7 +136,6 @@ export function registerReservationHandlers(bot: Telegraf, services: BotServices
   );
 }
 
-/** Routes a week chosen from the inline picker to the dining-hall list. */
 export async function handleWeekSelection(ctx: Context, services: BotServices, week: WeekSelection): Promise<void> {
   await onShowSelfsForReservation(ctx, services, week);
 }

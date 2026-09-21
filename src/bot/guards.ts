@@ -1,9 +1,11 @@
-import type { Context } from 'telegraf';
+import type { Context, MiddlewareFn } from 'telegraf';
+import type { ExtraReplyMessage } from 'telegraf/typings/telegram-types';
+import type { FeatureKey } from '../domain/features';
 import type { User } from '../domain/models';
 import { isAdmin } from '../config/env';
 import { copy } from '../copy/fa';
 import { loginMenu } from './keyboards';
-import { replyHtml } from './reply';
+import { handler, replyHtml } from './reply';
 import type { BotServices } from './services';
 
 /**
@@ -71,4 +73,38 @@ export async function requireAdmin(ctx: Context): Promise<number | null> {
   }
 
   return telegramId;
+}
+
+/**
+ * Requires a feature to be switched on, explaining when an operator turned it off.
+ *
+ * Returning `false` rather than throwing means a disabled section ends with one
+ * clear sentence instead of the generic failure the error handler would produce,
+ * which is the difference between "this was deliberate" and "this is broken".
+ */
+export async function requireFeature(ctx: Context, services: BotServices, key: FeatureKey, keyboard?: ExtraReplyMessage): Promise<boolean> {
+  if (await services.features.isEnabled(key)) {
+    return true;
+  }
+
+  await replyHtml(ctx, copy.features.disabled(key), keyboard);
+
+  return false;
+}
+
+/** A menu handler that only runs while its feature is enabled. */
+export function gated(
+  name: string,
+  key: FeatureKey,
+  services: BotServices,
+  run: (ctx: Context) => Promise<void>,
+  keyboard?: ExtraReplyMessage,
+): MiddlewareFn<Context> {
+  return handler(name, async ctx => {
+    if (!(await requireFeature(ctx, services, key, keyboard))) {
+      return;
+    }
+
+    await run(ctx);
+  });
 }

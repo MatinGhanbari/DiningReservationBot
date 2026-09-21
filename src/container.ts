@@ -4,6 +4,7 @@ import { AutoReserveService } from './app/auto-reserve.service';
 import { AuthService } from './app/auth.service';
 import { ChatbotService } from './app/chatbot.service';
 import { CreditWatchService } from './app/credit-watch.service';
+import { FeatureService } from './app/feature.service';
 import { ForgetCodeService } from './app/forget-code.service';
 import { ReservationService } from './app/reservation.service';
 import { SessionService } from './app/session.service';
@@ -18,6 +19,7 @@ import { AesSecretBox } from './crypto/secret-box';
 import { SqliteChatbotRepository } from './db/chatbot.repository';
 import { SqliteForgetCodeReportRepository, SqliteForgetCodeRepository } from './db/forget-code.repository';
 import { closeDatabase, openDatabase, type SqliteDatabase } from './db/database';
+import { SqliteFeatureRepository } from './db/feature.repository';
 import { SqliteSystemProbe } from './db/maintenance';
 import { migrate } from './db/migrations';
 import { SqliteSupportRepository } from './db/support.repository';
@@ -69,6 +71,7 @@ export function createContainer(): Container {
   const forgetCodeReports = new SqliteForgetCodeReportRepository(db);
   const supportTickets = new SqliteSupportRepository(db);
   const chatbotMessages = new SqliteChatbotRepository(db);
+  const featureFlags = new SqliteFeatureRepository(db);
   const system = new SqliteSystemProbe(db, config.DATABASE_PATH);
 
   const sessions = new MemorySessionStore(clock);
@@ -100,6 +103,7 @@ export function createContainer(): Container {
   const auth = new AuthService(users, gateway, secretBox, sessionService, clock);
   const reservations = new ReservationService(users, gateway, sessionService, clock);
   const forgetCodeService = new ForgetCodeService(forgetCodes, forgetCodeReports, users, reservations, gateway, sessionService, clock);
+  const features = new FeatureService(featureFlags);
 
   // ── Presentation ──────────────────────────────────────────────────────────
 
@@ -134,6 +138,7 @@ export function createContainer(): Container {
     support,
     chatbot,
     admin,
+    features,
     messenger: notifier,
     conversations,
     clock,

@@ -2,7 +2,7 @@ import type { Context, MiddlewareFn, Telegraf } from 'telegraf';
 import { isAdmin } from '../../config/env';
 import { copy } from '../../copy/fa';
 import { UNIVERSITIES, findUniversityById } from '../../domain/universities';
-import { messageTextOf, requireLogin, telegramIdOf } from '../guards';
+import { messageTextOf, requireFeature, requireLogin, telegramIdOf } from '../guards';
 import { BTN, backMenu, isMenuButton, loginMenu, mainMenu, universityPicker } from '../keyboards';
 import { handler, replyHtml, tryReplyHtml, withTyping } from '../reply';
 import type { BotServices } from '../services';
@@ -69,6 +69,10 @@ async function onLogout(ctx: Context, services: BotServices): Promise<void> {
 }
 
 async function onMyInfo(ctx: Context, services: BotServices): Promise<void> {
+  if (!(await requireFeature(ctx, services, 'profile', backMenu()))) {
+    return;
+  }
+
   const guard = await requireLogin(ctx, services);
 
   if (guard === null) {
@@ -258,7 +262,13 @@ export function registerStartHandlers(bot: Telegraf, services: BotServices): voi
   );
   bot.command(
     'about',
-    handler('about', ctx => replyHtml(ctx, copy.about(), backMenu())),
+    handler('about', async ctx => {
+      if (!(await requireFeature(ctx, services, 'about', backMenu()))) {
+        return;
+      }
+
+      await replyHtml(ctx, copy.about(), backMenu());
+    }),
   );
   bot.command(
     'logout',
