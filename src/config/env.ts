@@ -119,7 +119,9 @@ const EnvSchema = z.object({
   DB_MMAP_MB: positiveInteger(256),
 
   // Security
-  ENCRYPTION_KEY: z.string().min(32, 'کلید رمزنگاری باید حداقل ۳۲ کاراکتر باشد. با دستور «openssl rand -hex 32» یکی بسازید.'),
+  ENCRYPTION_KEY: z
+    .string()
+    .min(64, 'کلید رمزنگاری باید حداقل ۶۴ کاراکتر باشد. با دستور «openssl rand -hex 48» یک کلید ۹۶ کاراکتری بسازید.'),
 
   // Session / cache
   SESSION_TTL_MINUTES: positiveInteger(60),

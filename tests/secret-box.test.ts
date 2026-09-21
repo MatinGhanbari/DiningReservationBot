@@ -1,8 +1,9 @@
+import { createCipheriv, randomBytes, scryptSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { AesSecretBox, secretsMatch } from '../src/crypto/secret-box';
 
-const KEY = 'a-test-key-that-is-definitely-long-enough';
-const OTHER_KEY = 'a-different-key-that-is-also-long-enough';
+const KEY = 'a-test-key-that-is-definitely-long-enough-for-the-required-minimum-length';
+const OTHER_KEY = 'a-different-key-that-is-also-long-enough-for-the-required-minimum-length';
 
 describe('AesSecretBox', () => {
   it('round-trips a password', () => {
@@ -51,7 +52,22 @@ describe('AesSecretBox', () => {
 
   it('tags the format with a version so the scheme can change later', () => {
     const box = new AesSecretBox(KEY);
-    expect(box.encrypt('x').startsWith('v1:')).toBe(true);
+    expect(box.encrypt('x').startsWith('v2:')).toBe(true);
+  });
+
+  it('still decrypts a payload written by the previous scheme', () => {
+    // The previous release derived its key with a different salt and cheaper
+    // scrypt parameters, and wrote `v1:` envelopes without additional
+    // authenticated data. Rows in that format are already in the database, so
+    // dropping support for them would log every user out.
+    const legacyKey = scryptSync(KEY, 'dining-reservation-bot/password-box/v1', 32, { N: 1 << 14, r: 8, p: 1, maxmem: 32 * 1024 * 1024 });
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', legacyKey, iv, { authTagLength: 16 });
+
+    const ciphertext = Buffer.concat([cipher.update('legacy-password', 'utf8'), cipher.final()]);
+    const payload = ['v1', iv.toString('base64'), cipher.getAuthTag().toString('base64'), ciphertext.toString('base64')].join(':');
+
+    expect(new AesSecretBox(KEY).decrypt(payload)).toBe('legacy-password');
   });
 });
 

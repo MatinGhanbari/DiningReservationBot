@@ -12,7 +12,7 @@ import { SessionExpiredError } from '../src/shared/errors';
 import { FixedClock } from '../src/shared/clock';
 import { createFakeGateway, createTestDatabase, fixedClock, makeUser, mealOption } from './helpers';
 
-const KEY = 'a-test-key-that-is-definitely-long-enough';
+const KEY = 'a-test-key-that-is-definitely-long-enough-for-the-required-minimum-length';
 
 /** Auto-reserve only ever runs for someone who has switched it on. */
 const autoReserveUser = (overrides: Partial<User> = {}): User =>

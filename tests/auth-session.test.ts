@@ -10,7 +10,7 @@ import { InvalidCredentialsError, SessionExpiredError } from '../src/shared/erro
 import { FixedClock } from '../src/shared/clock';
 import { createFakeGateway, createTestDatabase, fixedClock, makeUser } from './helpers';
 
-const KEY = 'a-test-key-that-is-definitely-long-enough';
+const KEY = 'a-test-key-that-is-definitely-long-enough-for-the-required-minimum-length';
 
 /** The shared factory stores a placeholder cipher; these tests need a real one. */
 const withPassword = (overrides: Partial<User> = {}): User =>

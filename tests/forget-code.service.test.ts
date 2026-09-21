@@ -12,7 +12,7 @@ import { NotFoundError, UpstreamRejectedError } from '../src/shared/errors';
 import { FixedClock } from '../src/shared/clock';
 import { createFakeGateway, createTestDatabase, expectUserMessage, fixedClock, makeUser, mealOption, reservedMeal } from './helpers';
 
-const KEY = 'a-test-key-that-is-definitely-long-enough';
+const KEY = 'a-test-key-that-is-definitely-long-enough-for-the-required-minimum-length';
 
 /** The shared factory stores a placeholder cipher; these tests need a real one. */
 const withPassword = (overrides: Partial<User> = {}): User =>
