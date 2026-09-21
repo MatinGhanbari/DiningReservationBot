@@ -3,7 +3,7 @@ import { isAdmin } from '../../config/env';
 import { copy } from '../../copy/fa';
 import { isMenuButton, BTN, backMenu, supportMenu } from '../keyboards';
 import { messageTextOf, telegramIdOf } from '../guards';
-import { handler, replyHtml, tryReplyHtml } from '../reply';
+import { handler, replyHtml, tryReplyHtml, withTyping } from '../reply';
 import { clampToLine, clampText } from '../../shared/sanitize';
 import type { BotServices } from '../services';
 
@@ -55,7 +55,11 @@ async function askChatbot(ctx: Context, services: BotServices, telegramId: numbe
   await services.conversations.clear(telegramId);
   await tryReplyHtml(ctx, copy.support.chatbotThinking());
 
-  const answer = await services.chatbot.ask(telegramId, question);
+  // The language model is the slowest thing this bot talks to, and the one place
+  // where a single chat action is guaranteed to expire before the answer lands:
+  // a free model that has to be retried once can take the better part of a
+  // minute. `withTyping` holds the indicator on for the whole call.
+  const answer = await withTyping(ctx, () => services.chatbot.ask(telegramId, question));
 
   await replyHtml(ctx, copy.support.chatbotAnswer(answer.answer, answer.limit - answer.used), supportMenu(services.chatbot.available));
 }

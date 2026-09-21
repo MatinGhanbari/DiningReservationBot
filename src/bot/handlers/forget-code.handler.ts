@@ -1,10 +1,9 @@
 import type { Context, Telegraf } from 'telegraf';
-import type { ReservedMeal } from '../../domain/models';
 import { copy } from '../../copy/fa';
 import { requireLogin } from '../guards';
 import { BTN, backMenu, forgetCodeMenu, receiveSelfPicker, shareConfirm, shareTargetPicker } from '../keyboards';
 import { formatJalaliDate } from '../../shared/persian';
-import { handler, replyHtml, tryReplyHtml } from '../reply';
+import { handler, replyHtml, tryReplyHtml, withTyping } from '../reply';
 import type { BotServices } from '../services';
 
 /**
@@ -41,16 +40,18 @@ async function onShareForgetCode(ctx: Context, services: BotServices): Promise<v
 
   await tryReplyHtml(ctx, copy.reserves.loading());
 
-  const current = await services.reservations.listReserves(guard.telegramId, 'current');
+  // The second lookup only happens when the first came back empty, so the
+  // indicator has to cover both rather than being set once per request.
+  const { week, meals } = await withTyping(ctx, async () => {
+    const current = await services.reservations.listReserves(guard.telegramId, 'current');
 
-  let week: 'current' | 'next' = 'current';
-  let meals: readonly ReservedMeal[] = current.meals;
+    if (current.meals.length > 0) {
+      return { week: 'current' as const, meals: current.meals };
+    }
 
-  if (meals.length === 0) {
     const next = await services.reservations.listReserves(guard.telegramId, 'next');
-    week = 'next';
-    meals = next.meals;
-  }
+    return { week: 'next' as const, meals: next.meals };
+  });
 
   if (meals.length === 0) {
     await replyHtml(ctx, copy.forgetCode.nothingToShare(), backMenu());
@@ -72,7 +73,7 @@ export async function handleShareTarget(ctx: Context, services: BotServices, res
     return;
   }
 
-  const meal = await services.reservations.findReservedMeal(guard.telegramId, reserveId);
+  const meal = await withTyping(ctx, () => services.reservations.findReservedMeal(guard.telegramId, reserveId));
 
   await replyHtml(ctx, copy.forgetCode.shareConfirmation(meal.foodName, meal.weekdayName), shareConfirm(reserveId));
 }
@@ -87,7 +88,7 @@ export async function handleShareConfirm(ctx: Context, services: BotServices, re
 
   await tryReplyHtml(ctx, copy.forgetCode.fetching());
 
-  const outcome = await services.forgetCodes.share(guard.telegramId, reserveId);
+  const outcome = await withTyping(ctx, () => services.forgetCodes.share(guard.telegramId, reserveId));
 
   if (outcome.kind === 'already-shared') {
     await replyHtml(ctx, copy.forgetCode.alreadyShared(outcome.issued.code), backMenu());
@@ -116,7 +117,7 @@ async function onReceiveForgetCode(ctx: Context, services: BotServices): Promise
 
   await tryReplyHtml(ctx, copy.reservation.loadingSelfs());
 
-  const selfs = await services.reservations.listSelfs(guard.telegramId);
+  const selfs = await withTyping(ctx, () => services.reservations.listSelfs(guard.telegramId));
 
   if (selfs.length === 0) {
     await replyHtml(ctx, copy.reservation.noSelfs(), backMenu());
@@ -136,9 +137,14 @@ export async function handleReceiveSelf(ctx: Context, services: BotServices, sel
 
   await tryReplyHtml(ctx, copy.forgetCode.fetching());
 
-  const claimed = await services.forgetCodes.claimTodaysCode(guard.telegramId, selfId);
-
-  const meal = await services.reservations.findTodaysProgram(guard.telegramId, selfId);
+  // Sequential rather than parallel, exactly as before: the program lookup is
+  // only worth doing once the claim has succeeded, and it should not be fired
+  // off against a code the user may not have got.
+  const { claimed, meal } = await withTyping(ctx, async () => {
+    const claimed = await services.forgetCodes.claimTodaysCode(guard.telegramId, selfId);
+    const meal = await services.reservations.findTodaysProgram(guard.telegramId, selfId);
+    return { claimed, meal };
+  });
 
   await replyHtml(
     ctx,

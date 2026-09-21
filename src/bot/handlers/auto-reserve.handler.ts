@@ -3,7 +3,7 @@ import { copy } from '../../copy/fa';
 import { weekdayByIndex } from '../../shared/persian';
 import { requireLogin } from '../guards';
 import { BTN, autoReserveMenu, autoReserveSelfPicker, backMenu, weekdayPicker } from '../keyboards';
-import { handler, replyHtml, tryReplyHtml } from '../reply';
+import { handler, replyHtml, tryReplyHtml, withTyping } from '../reply';
 import type { BotServices } from '../services';
 
 /**
@@ -34,8 +34,13 @@ async function resolveSelfName(services: BotServices, telegramId: number, selfId
 }
 
 async function showStatus(ctx: Context, services: BotServices, telegramId: number): Promise<void> {
-  const settings = await services.autoReserve.getSettings(telegramId);
-  const selfName = await resolveSelfName(services, telegramId, settings.selfId);
+  // The settings are local, but resolving the hall's name is a Samad call, and
+  // this screen is redrawn after almost every change in this flow.
+  const { settings, selfName } = await withTyping(ctx, async () => {
+    const settings = await services.autoReserve.getSettings(telegramId);
+    const selfName = await resolveSelfName(services, telegramId, settings.selfId);
+    return { settings, selfName };
+  });
 
   await replyHtml(
     ctx,
@@ -61,7 +66,7 @@ async function onAutoReserveMenu(ctx: Context, services: BotServices): Promise<v
 
 /** Lists dining halls so one can be chosen, optionally enabling afterwards. */
 async function askForSelf(ctx: Context, services: BotServices, telegramId: number): Promise<void> {
-  const selfs = await services.reservations.listSelfs(telegramId);
+  const selfs = await withTyping(ctx, () => services.reservations.listSelfs(telegramId));
 
   if (selfs.length === 0) {
     await replyHtml(ctx, copy.reservation.noSelfs(), backMenu());
@@ -150,7 +155,7 @@ export async function handleSelfChoice(ctx: Context, services: BotServices, self
 
   await services.autoReserve.setSelf(guard.telegramId, selfId);
 
-  const selfs = await services.reservations.listSelfs(guard.telegramId);
+  const selfs = await withTyping(ctx, () => services.reservations.listSelfs(guard.telegramId));
   const selfName = selfs.find(self => self.id === selfId)?.name ?? `سلف ${selfId}`;
 
   await replyHtml(ctx, copy.autoReserve.selfChosen(selfName));

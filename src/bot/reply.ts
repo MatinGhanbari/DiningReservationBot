@@ -3,6 +3,7 @@ import type { ExtraReplyMessage } from 'telegraf/typings/telegram-types';
 import { copy } from '../copy/fa';
 import { isAppError, toAppError } from '../shared/errors';
 import { scopedLogger } from '../shared/logger';
+import { sendTyping } from './typing';
 
 const log = scopedLogger('bot');
 
@@ -14,8 +15,13 @@ const log = scopedLogger('bot');
  * from Samad would have to be escaped correctly or Telegram rejects the entire
  * message. HTML needs four characters, and the copy module escapes them at the
  * point where the values are interpolated.
+ *
+ * The «typing…» indicator is set here rather than at each call site so that no
+ * reply can be the one that forgot. It is throttled per chat in `./typing`, so a
+ * handler that answers twice in a row pays for one chat action, not two.
  */
 export async function replyHtml(ctx: Context, html: string, extra?: ExtraReplyMessage): Promise<void> {
+  await sendTyping(ctx);
   await ctx.reply(html, { parse_mode: 'HTML', ...extra });
 }
 
@@ -112,3 +118,12 @@ export function nonBlocking(name: string, fn: (ctx: Context) => Promise<void>): 
 export async function replyUnknownInput(ctx: Context): Promise<void> {
   await tryReplyHtml(ctx, copy.menu.useButtons());
 }
+
+/**
+ * Re-exported so a handler has one import for everything it sends.
+ *
+ * `withTyping` is the piece handlers actually need: `replyHtml` sets the
+ * indicator on its way out, but only wrapping the slow call keeps it on while
+ * that call is still running.
+ */
+export { sendTyping, withTyping } from './typing';

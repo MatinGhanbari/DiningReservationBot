@@ -4,7 +4,7 @@ import { copy } from '../../copy/fa';
 import { UNIVERSITIES, findUniversityById } from '../../domain/universities';
 import { messageTextOf, requireLogin, telegramIdOf } from '../guards';
 import { BTN, backMenu, isMenuButton, loginMenu, mainMenu, universityPicker } from '../keyboards';
-import { handler, replyHtml, tryReplyHtml } from '../reply';
+import { handler, replyHtml, tryReplyHtml, withTyping } from '../reply';
 import type { BotServices } from '../services';
 import type { ConversationState } from '../state';
 import { handleAdminUserQuery, handleBroadcastText } from './admin.handler';
@@ -77,7 +77,9 @@ async function onMyInfo(ctx: Context, services: BotServices): Promise<void> {
 
   await tryReplyHtml(ctx, copy.profile.loading());
 
-  const profile = await services.reservations.getProfile(guard.telegramId);
+  // Reading the profile is a round trip to Samad, which is the slowest part of
+  // this screen and the part the user is waiting on.
+  const profile = await withTyping(ctx, () => services.reservations.getProfile(guard.telegramId));
   const universityName = findUniversityById(profile.universityId)?.name ?? 'نامشخص';
 
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
@@ -191,7 +193,17 @@ async function advance(
     case 'awaiting-password': {
       await replyHtml(ctx, copy.start.checking());
 
-      const { user, isNewUser } = await services.auth.login(telegramId, state.universityId, state.samadUsername, text);
+      // Captured before the closure on purpose: `state` and `text` are function
+      // parameters, and TypeScript does not carry a narrowed parameter into a
+      // callback. The object literal is evaluated while the narrowing is still
+      // in scope, so the call inside `withTyping` sees plain strings.
+      const credentials = { universityId: state.universityId, samadUsername: state.samadUsername, password: text };
+
+      // Logging in is a Samad round trip that has to finish before the welcome
+      // screen can be drawn, so the indicator is held for its duration.
+      const { user, isNewUser } = await withTyping(ctx, () =>
+        services.auth.login(telegramId, credentials.universityId, credentials.samadUsername, credentials.password),
+      );
 
       // Best effort: clearing the message that held the password keeps it out of
       // the chat history on both sides.

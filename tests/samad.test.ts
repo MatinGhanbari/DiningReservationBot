@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { samadSettings } from '../src/config/appsettings';
 import { InvalidCredentialsError, SessionExpiredError, UpstreamRejectedError } from '../src/shared/errors';
 import { SamadHttpClient } from '../src/samad/client';
 import { SamadApiGateway, formatSamadWeekStart } from '../src/samad/gateway';
@@ -519,7 +520,14 @@ describe('SamadApiGateway', () => {
     const sent = request.mock.calls.at(-1)?.[0] as { path: string; extraHeaders: Record<string, string>; formBody: Record<string, string> };
 
     expect(sent.path).toBe('/oauth/token');
-    expect(sent.extraHeaders.authorization).toBe('Basic c2FtYWQtbW9iaWxlOnNhbWFkLW1vYmlsZS1zZWNyZXQ=');
+
+    // The credential itself is deliberately not written out here. A tracked file
+    // must not carry it, and it has exactly one home — `appsettings.json`, or an
+    // override of it. What this asserts is the behaviour that matters: the
+    // gateway sends the configured client credential, not one of its own.
+    expect(sent.extraHeaders.authorization).toBe(samadSettings.client.basicAuth);
+    expect(sent.extraHeaders.authorization).toMatch(/^Basic [A-Za-z0-9+/=]+$/);
+
     expect(sent.formBody).toMatchObject({ grant_type: 'password', scope: 'read write' });
   });
 });

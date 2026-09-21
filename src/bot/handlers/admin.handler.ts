@@ -18,7 +18,7 @@ import {
   ticketList,
   userActions,
 } from '../keyboards';
-import { handler, replyHtml, tryReplyHtml } from '../reply';
+import { handler, replyHtml, tryReplyHtml, withTyping } from '../reply';
 import type { BotServices } from '../services';
 import type { AdminOverview } from '../../app/admin.service';
 
@@ -381,7 +381,10 @@ async function onBroadcastSend(ctx: Context, services: BotServices): Promise<voi
   await services.conversations.clear(adminId);
   await tryReplyHtml(ctx, copy.admin.broadcastRunning());
 
-  const result = await services.admin.broadcast(state.text);
+  // A broadcast is paced deliberately to stay under Telegram's rate limit, so
+  // the admin can be waiting for minutes. The indicator is the only sign the
+  // run is still alive.
+  const result = await withTyping(ctx, () => services.admin.broadcast(state.text));
 
   await replyHtml(ctx, copy.admin.broadcastDone(result), adminSubMenu());
 }
@@ -420,7 +423,7 @@ async function onPurge(ctx: Context, services: BotServices): Promise<void> {
     return;
   }
 
-  const result = await services.admin.runMaintenance();
+  const result = await withTyping(ctx, () => services.admin.runMaintenance());
 
   await replyHtml(
     ctx,
@@ -439,7 +442,7 @@ async function onBackup(ctx: Context, services: BotServices): Promise<void> {
   await replyHtml(ctx, copy.admin.backupIntro(), adminSubMenu());
 
   try {
-    const result = await services.admin.sendBackup(adminId, copy.admin.backupCaption());
+    const result = await withTyping(ctx, () => services.admin.sendBackup(adminId, copy.admin.backupCaption()));
 
     await replyHtml(ctx, copy.admin.backupDone(formatBytes(result.sizeBytes), result.users), adminSubMenu());
   } catch (error) {

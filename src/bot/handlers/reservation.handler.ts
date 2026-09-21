@@ -4,7 +4,7 @@ import { copy } from '../../copy/fa';
 import { requireLogin } from '../guards';
 import { BTN, backMenu, mealPicker, selfPicker, weekPicker } from '../keyboards';
 import { formatMealList, formatReserves, weekLabel } from '../formatters';
-import { handler, replyHtml, tryReplyHtml } from '../reply';
+import { handler, replyHtml, tryReplyHtml, withTyping } from '../reply';
 import type { BotServices } from '../services';
 
 /**
@@ -34,10 +34,9 @@ export async function handleSelfSelection(ctx: Context, services: BotServices, w
 
   await tryReplyHtml(ctx, copy.reservation.loadingMeals());
 
-  const [selfs, meals] = await Promise.all([
-    services.reservations.listSelfs(guard.telegramId),
-    services.reservations.listMealOptions(guard.telegramId, selfId, week),
-  ]);
+  const [selfs, meals] = await withTyping(ctx, () =>
+    Promise.all([services.reservations.listSelfs(guard.telegramId), services.reservations.listMealOptions(guard.telegramId, selfId, week)]),
+  );
 
   const selfName = selfs.find(self => self.id === selfId)?.name ?? 'سلف';
 
@@ -63,7 +62,9 @@ export async function handleReserveMeal(
     return;
   }
 
-  const outcome = await services.reservations.reserve(guard.telegramId, programId, foodTypeId, mealTypeId);
+  // Booking is the one write in this flow, so the indicator stays on until Samad
+  // has actually answered rather than until the request was sent.
+  const outcome = await withTyping(ctx, () => services.reservations.reserve(guard.telegramId, programId, foodTypeId, mealTypeId));
 
   // Samad's own explanation is shown rather than a generic message: it already
   // says whether the problem is credit, capacity, or timing.
@@ -84,7 +85,7 @@ export async function handleShowReserves(ctx: Context, services: BotServices, we
 
   await tryReplyHtml(ctx, copy.reserves.loading());
 
-  const reserves = await services.reservations.listReserves(guard.telegramId, week);
+  const reserves = await withTyping(ctx, () => services.reservations.listReserves(guard.telegramId, week));
   const label = weekLabel(week);
 
   if (reserves.meals.length === 0) {
@@ -104,7 +105,7 @@ async function onShowSelfsForReservation(ctx: Context, services: BotServices, we
 
   await tryReplyHtml(ctx, copy.reservation.loadingSelfs());
 
-  const selfs = await services.reservations.listSelfs(guard.telegramId);
+  const selfs = await withTyping(ctx, () => services.reservations.listSelfs(guard.telegramId));
 
   if (selfs.length === 0) {
     await replyHtml(ctx, copy.reservation.noSelfs(), backMenu());
