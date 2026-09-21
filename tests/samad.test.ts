@@ -44,15 +44,15 @@ describe('SamadHttpClient', () => {
       vi.fn(async () => jsonResponse({}, 401)),
     );
 
-    await expect(createClient().request({ universityId: 8, path: '/rest/reservations/selfs', method: 'GET', accessToken: 'x' })).rejects.toBeInstanceOf(
-      SessionExpiredError,
-    );
+    await expect(
+      createClient().request({ universityId: 8, path: '/rest/reservations/selfs', method: 'GET', accessToken: 'x' }),
+    ).rejects.toBeInstanceOf(SessionExpiredError);
 
     vi.unstubAllGlobals();
   });
 
   it('passes no custom dispatcher when TLS verification is enabled', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ payload: [] }));
+    const fetchMock = vi.fn(async (_url: string, _init: { dispatcher?: unknown }) => jsonResponse({ payload: [] }));
     vi.stubGlobal('fetch', fetchMock);
 
     await createClient().request({ universityId: 8, path: '/rest/reservations/selfs', method: 'GET' });
@@ -64,7 +64,7 @@ describe('SamadHttpClient', () => {
   });
 
   it('passes an insecure dispatcher when TLS verification is disabled', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ payload: [] }));
+    const fetchMock = vi.fn(async (_url: string, _init: { dispatcher?: unknown }) => jsonResponse({ payload: [] }));
     vi.stubGlobal('fetch', fetchMock);
 
     await new SamadHttpClient({ timeoutMs: 1_000, maxRetries: 2, logger: silentLogger, verifyTls: false }).request({
@@ -190,6 +190,7 @@ describe('SamadApiGateway', () => {
             {
               programId: 1,
               selfId: 5,
+              mealTypeId: 2,
               daysDifferenceWithToday: 3,
               date: '2026-09-22T00:00:00Z',
               programFoodTypes: [{ foodTypeId: 10, foodNames: 'چلوکباب', price: 120_000 }],
@@ -199,6 +200,7 @@ describe('SamadApiGateway', () => {
             {
               programId: 2,
               selfId: 5,
+              mealTypeId: 2,
               daysDifferenceWithToday: 4,
               date: '2026-09-23T00:00:00Z',
               programFoodTypes: [{ foodTypeId: 11, foodNames: 'قیمه', price: 90_000 }],
@@ -223,6 +225,7 @@ describe('SamadApiGateway', () => {
             {
               programId: 1,
               selfId: 5,
+              mealTypeId: 2,
               daysDifferenceWithToday: 2,
               date: '2026-09-21T00:00:00Z',
               programFoodTypes: [{ foodTypeId: 10, foodNames: 'زود', price: 1 }],
@@ -230,6 +233,7 @@ describe('SamadApiGateway', () => {
             {
               programId: 2,
               selfId: 5,
+              mealTypeId: 2,
               daysDifferenceWithToday: 3,
               date: '2026-09-22T00:00:00Z',
               programFoodTypes: [{ foodTypeId: 11, foodNames: 'دیر', price: 1 }],
@@ -255,6 +259,7 @@ describe('SamadApiGateway', () => {
             {
               programId: 1,
               selfId: 5,
+              mealTypeId: 2,
               daysDifferenceWithToday: 3,
               date: '2026-09-23T00:00:00Z',
               programFoodTypes: [{ foodTypeId: 10, foodNames: 'رزروشده', price: 1 }],
@@ -262,6 +267,7 @@ describe('SamadApiGateway', () => {
             {
               programId: 2,
               selfId: 5,
+              mealTypeId: 2,
               daysDifferenceWithToday: 3,
               date: '2026-09-23T00:00:00Z',
               programFoodTypes: [{ foodTypeId: 11, foodNames: 'آزاد', price: 1 }],
@@ -285,6 +291,7 @@ describe('SamadApiGateway', () => {
             {
               programId: 1,
               selfId: 5,
+              mealTypeId: 2,
               daysDifferenceWithToday: 0,
               date: '2026-09-20T00:00:00Z',
               programFoodTypes: [{ foodTypeId: 10, foodNames: 'امروز', price: 1 }],
@@ -310,7 +317,30 @@ describe('SamadApiGateway', () => {
   it('skips a program with no food types', async () => {
     request.mockResolvedValueOnce({
       payload: {
-        selfWeekPrograms: [[{ programId: 1, selfId: 5, daysDifferenceWithToday: 3, date: '2026-09-23T00:00:00Z', programFoodTypes: [] }]],
+        selfWeekPrograms: [
+          [{ programId: 1, selfId: 5, mealTypeId: 2, daysDifferenceWithToday: 3, date: '2026-09-23T00:00:00Z', programFoodTypes: [] }],
+        ],
+        userWeekReserves: [],
+      },
+    });
+
+    expect(await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5 })).toEqual([]);
+  });
+
+  it('skips a program with no meal type, which could not be booked correctly', async () => {
+    request.mockResolvedValueOnce({
+      payload: {
+        selfWeekPrograms: [
+          [
+            {
+              programId: 1,
+              selfId: 5,
+              daysDifferenceWithToday: 3,
+              date: '2026-09-23T00:00:00Z',
+              programFoodTypes: [{ foodTypeId: 10, foodNames: 'بدون وعده', price: 1 }],
+            },
+          ],
+        ],
         userWeekReserves: [],
       },
     });
@@ -395,16 +425,35 @@ describe('SamadApiGateway', () => {
   it('reports a successful reservation', async () => {
     request.mockResolvedValueOnce({ type: 'SUCCESS', messageFa: 'رزرو انجام شد.' });
 
-    const outcome = await gateway.reserve({ universityId: 8, accessToken: 't', programId: 1, foodTypeId: 10 });
+    const outcome = await gateway.reserve({ universityId: 8, accessToken: 't', programId: 1, foodTypeId: 10, mealTypeId: 2 });
 
     expect(outcome.succeeded).toBe(true);
     expect(outcome.message).toBe('رزرو انجام شد.');
   });
 
+  it('treats a created reservation id as success when the envelope has no type', async () => {
+    request.mockResolvedValueOnce({ payload: { id: 55_231 } });
+
+    const outcome = await gateway.reserve({ universityId: 8, accessToken: 't', programId: 1, foodTypeId: 10, mealTypeId: 2 });
+
+    expect(outcome.succeeded).toBe(true);
+  });
+
+  it('echoes the program meal type rather than assuming lunch', async () => {
+    request.mockResolvedValueOnce({ type: 'SUCCESS' });
+
+    await gateway.reserve({ universityId: 8, accessToken: 't', programId: 77, foodTypeId: 10, mealTypeId: 3 });
+
+    const sent = request.mock.calls.at(-1)?.[0] as { path: string; jsonBody: { mealTypeId: number } };
+
+    expect(sent.path).toBe('/rest/reserves/77/reserve');
+    expect(sent.jsonBody.mealTypeId).toBe(3);
+  });
+
   it('reports a rejected reservation with the upstream explanation', async () => {
     request.mockResolvedValueOnce({ type: 'ERROR', messageFa: 'موجودی کافی نیست.' });
 
-    const outcome = await gateway.reserve({ universityId: 8, accessToken: 't', programId: 1, foodTypeId: 10 });
+    const outcome = await gateway.reserve({ universityId: 8, accessToken: 't', programId: 1, foodTypeId: 10, mealTypeId: 2 });
 
     expect(outcome.succeeded).toBe(false);
     expect(outcome.message).toBe('موجودی کافی نیست.');
@@ -447,5 +496,30 @@ describe('SamadApiGateway', () => {
     request.mockResolvedValueOnce({ payload: { forgotCardCode: '   ', remainCount: 1 } });
 
     await expect(gateway.issueForgetCode(8, 't', 101, new Date())).rejects.toBeInstanceOf(UpstreamRejectedError);
+  });
+
+  it('prints a card code from the captured path, with dailySale stated', async () => {
+    request.mockResolvedValueOnce({ payload: { forgotCardCode: 'REAL-CODE', remainCount: 1 } });
+
+    await gateway.issueForgetCode(8, 't', 15_259_528, new Date('2026-09-22T00:00:00Z'));
+
+    const sent = request.mock.calls.at(-1)?.[0] as { path: string; query: Record<string, unknown> };
+
+    // The path is the one the web client uses. It is not nested under
+    // /rest/reservations, which is where the bot used to look.
+    expect(sent.path).toBe('/rest/forget-card-codes/print');
+    expect(sent.query).toEqual({ reserveId: 15_259_528, count: 1, dailySale: 'false' });
+  });
+
+  it('sends the captured mobile credential on the token request', async () => {
+    request.mockResolvedValueOnce({ access_token: 'tok', expires_in: 3_600 });
+
+    await gateway.login({ universityId: 8, samadUsername: 'u', password: 'p' });
+
+    const sent = request.mock.calls.at(-1)?.[0] as { path: string; extraHeaders: Record<string, string>; formBody: Record<string, string> };
+
+    expect(sent.path).toBe('/oauth/token');
+    expect(sent.extraHeaders.authorization).toBe('Basic c2FtYWQtbW9iaWxlOnNhbWFkLW1vYmlsZS1zZWNyZXQ=');
+    expect(sent.formBody).toMatchObject({ grant_type: 'password', scope: 'read write' });
   });
 });

@@ -1,10 +1,23 @@
 import type { Logger } from 'pino';
 import { Agent, type Dispatcher } from 'undici';
+import { samadSettings } from '../config/appsettings';
 import { findUniversityById } from '../domain/universities';
 import { isTransientNetworkError, retry } from '../shared/async';
 import { readTextWithLimit, redactUrl } from '../shared/http';
 import { InvalidCredentialsError, SessionExpiredError, UpstreamRejectedError, UpstreamUnavailableError } from '../shared/errors';
 import type { SamadEnvelope } from './types';
+
+/**
+ * Headers every Samad request carries.
+ *
+ * Samad's gateway is sensitive to them — a default Node fetch UA is treated as a
+ * bot — so we mirror the captured browser rather than send a bare request. The
+ * values live in `appsettings.json` with the routes they accompany.
+ *
+ * `extraHeaders` and the bearer token are merged after these, so they still win
+ * when they conflict.
+ */
+const DEFAULT_SAMAD_HEADERS: Record<string, string> = { accept: 'application/json', ...samadSettings.headers };
 
 export interface SamadHttpClientOptions {
   timeoutMs: number;
@@ -104,7 +117,7 @@ export class SamadHttpClient {
       }
     }
 
-    const headers: Record<string, string> = { accept: 'application/json', ...request.extraHeaders };
+    const headers: Record<string, string> = { ...DEFAULT_SAMAD_HEADERS, ...request.extraHeaders };
     let body: string | undefined;
 
     if (request.accessToken !== undefined) {

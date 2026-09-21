@@ -152,7 +152,12 @@ export const mealPicker = (meals: readonly MealOption[]) =>
     meals.map((meal, index) => [
       Markup.button.callback(
         copy.reservation.mealButton(index + 1, meal.foodName),
-        encodeCallback({ kind: 'reserve-meal', programId: meal.programId, foodTypeId: meal.foodTypeId }),
+        encodeCallback({
+          kind: 'reserve-meal',
+          programId: meal.programId,
+          foodTypeId: meal.foodTypeId,
+          mealTypeId: meal.mealTypeId,
+        }),
       ),
     ]),
   );

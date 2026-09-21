@@ -7,7 +7,7 @@ const actions: CallbackAction[] = [
   { kind: 'choose-self', week: 'next' },
   { kind: 'select-self', week: 'next', selfId: 12 },
   { kind: 'show-reserves', week: 'current' },
-  { kind: 'reserve-meal', programId: 987, foodTypeId: 42 },
+  { kind: 'reserve-meal', programId: 987, foodTypeId: 42, mealTypeId: 2 },
   { kind: 'auto-reserve-self', selfId: 5 },
   { kind: 'auto-reserve-day', weekday: 0 },
   { kind: 'auto-reserve-day', weekday: 6 },

@@ -50,14 +50,20 @@ export async function handleSelfSelection(ctx: Context, services: BotServices, w
 }
 
 /** Books one meal and reports exactly what Samad said. */
-export async function handleReserveMeal(ctx: Context, services: BotServices, programId: number, foodTypeId: number): Promise<void> {
+export async function handleReserveMeal(
+  ctx: Context,
+  services: BotServices,
+  programId: number,
+  foodTypeId: number,
+  mealTypeId: number,
+): Promise<void> {
   const guard = await requireLogin(ctx, services);
 
   if (guard === null) {
     return;
   }
 
-  const outcome = await services.reservations.reserve(guard.telegramId, programId, foodTypeId);
+  const outcome = await services.reservations.reserve(guard.telegramId, programId, foodTypeId, mealTypeId);
 
   // Samad's own explanation is shown rather than a generic message: it already
   // says whether the problem is credit, capacity, or timing.

@@ -1,9 +1,13 @@
+import { samadSettings } from '../config/appsettings';
+
 /**
  * Reference data for the universities this bot supports.
  *
- * Samad runs one deployment per university, so the numeric id both selects the
- * base URL and identifies the account namespace. Keeping the list in one place
- * means the bot and the upstream client can never disagree about which ids exist.
+ * The list itself lives in `appsettings.json` alongside the Samad routes, so a
+ * new deployment is added in the same file as the endpoints it will be called
+ * with. This module is the typed, indexed view of that data: callers keep asking
+ * for a university by id or by the button label the user tapped, and never touch
+ * the raw settings.
  */
 export interface University {
   id: number;
@@ -14,38 +18,9 @@ export interface University {
   baseUrl: string;
 }
 
-export const UNIVERSITIES: readonly University[] = [
-   {
-    id: 15,
-    name: 'دانشگاه علم و صنعت ایران',
-    shortName: 'علم و صنعت',
-    baseUrl: 'https://stu.iust.ac.ir',
-  },
-  {
-    id: 8,
-    name: 'دانشگاه صنعتی خواجه نصیرالدین طوسی',
-    shortName: 'خواجه نصیر',
-    baseUrl: 'https://refahi.kntu.ac.ir',
-  },
-  {
-    id: 3,
-    name: 'دانشگاه شهید بهشتی',
-    shortName: 'شهید بهشتی',
-    baseUrl: 'https://dining.sbu.ac.ir',
-  },
-  {
-    id: 6,
-    name: 'دانشگاه صنعتی امیرکبیر',
-    shortName: 'امیرکبیر',
-    baseUrl: 'https://samad.aut.ac.ir',
-  },
-  {
-    id: 7,
-    name: 'دانشگاه صنعتی شریف',
-    shortName: 'شریف',
-    baseUrl: 'https://setad.dining.sharif.edu',
-  },
-] as const;
+export const UNIVERSITIES: readonly University[] = Object.freeze(
+  samadSettings.universities.map(university => Object.freeze({ ...university })),
+);
 
 const BY_ID = new Map<number, University>(UNIVERSITIES.map(university => [university.id, university]));
 

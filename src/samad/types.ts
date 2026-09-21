@@ -117,6 +117,10 @@ export interface SamadProgramsResponse extends SamadEnvelope {
 export interface SamadReserveResponse extends SamadEnvelope {
   /** `SUCCESS` or `ERROR`; treated case-insensitively. */
   type?: string;
+  /** The created reservation. Present on success in the deployments that omit `type`. */
+  payload?: {
+    id?: number;
+  };
 }
 
 export interface SamadProfileResponse extends SamadEnvelope {

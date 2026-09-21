@@ -22,7 +22,7 @@ export type CallbackAction =
   | { kind: 'choose-self'; week: WeekSelection }
   | { kind: 'select-self'; week: WeekSelection; selfId: number }
   | { kind: 'show-reserves'; week: WeekSelection }
-  | { kind: 'reserve-meal'; programId: number; foodTypeId: number }
+  | { kind: 'reserve-meal'; programId: number; foodTypeId: number; mealTypeId: number }
   | { kind: 'auto-reserve-self'; selfId: number }
   | { kind: 'auto-reserve-day'; weekday: number }
   | { kind: 'forget-code-share'; reserveId: number }
@@ -75,7 +75,7 @@ export function encodeCallback(action: CallbackAction): string {
     case 'show-reserves':
       return `w:${WEEK_CODES[action.week]}`;
     case 'reserve-meal':
-      return `m:${action.programId}:${action.foodTypeId}`;
+      return `m:${action.programId}:${action.foodTypeId}:${action.mealTypeId}`;
     case 'auto-reserve-self':
       return `a:s:${action.selfId}`;
     case 'auto-reserve-day':
@@ -112,7 +112,7 @@ export function encodeCallback(action: CallbackAction): string {
  */
 export function decodeCallback(data: string): CallbackAction | null {
   const parts = data.split(':');
-  const [prefix, first, second] = parts;
+  const [prefix, first, second, third] = parts;
 
   switch (prefix) {
     case 'u': {
@@ -139,7 +139,10 @@ export function decodeCallback(data: string): CallbackAction | null {
     case 'm': {
       const programId = parsePositiveInt(first);
       const foodTypeId = parsePositiveInt(second);
-      return programId === null || foodTypeId === null ? null : { kind: 'reserve-meal', programId, foodTypeId };
+      const mealTypeId = parsePositiveInt(third);
+      return programId === null || foodTypeId === null || mealTypeId === null
+        ? null
+        : { kind: 'reserve-meal', programId, foodTypeId, mealTypeId };
     }
 
     case 'a': {

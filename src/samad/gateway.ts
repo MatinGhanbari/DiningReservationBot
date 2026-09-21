@@ -8,8 +8,8 @@ import type {
   UserProfile,
   WeeklyReserves,
 } from '../domain/models';
-import { LUNCH_MEAL_TYPE_ID } from '../domain/models';
 import type { LoginInput, ProgramQuery, ReserveInput, ReservesQuery, SamadGateway } from '../domain/ports';
+import { samadRoute, samadSettings } from '../config/appsettings';
 import { RESERVABLE_DAYS_AHEAD } from '../shared/time';
 import { normalizePersianText } from '../shared/persian';
 import { UpstreamRejectedError } from '../shared/errors';
@@ -29,10 +29,17 @@ import type {
  * The client credential the Samad mobile app itself uses.
  *
  * It is a public identifier baked into a shipped application, not a secret of
- * ours, which is why it lives in code rather than in configuration. It is named
- * here instead of inlined so that the next reader can see what it is.
+ * ours. It lives in `appsettings.json` beside the routes because it is part of
+ * the same captured client fingerprint, and a deployment that ever rotates it
+ * should not need a code change.
  */
-const SAMAD_MOBILE_BASIC_AUTH = `Basic ${Buffer.from('samad-mobile:samad-mobile-secret').toString('base64')}`;
+const SAMAD_MOBILE_BASIC_AUTH = samadSettings.client.basicAuth;
+
+/**
+ * The self type the web and mobile clients always send on the reserves endpoint.
+ * Omitting it makes Samad return an empty week instead of the user's reserves.
+ */
+const SAMAD_SELF_TYPE = samadSettings.client.selfType;
 
 /** Samad's own week-start format: `YYYY-MM-DD+HH:mm:ss`. */
 export function formatSamadWeekStart(date: Date): string {
@@ -67,8 +74,8 @@ function cleanText(value: string | undefined, fallback = ''): string {
  * Adapts Samad's HTTP API to the domain.
  *
  * All knowledge of Samad's field names, its array-of-arrays program structure,
- * and its inconsistent null handling is contained in this class. Everything
- * above it works with `MealOption` and `ReservedMeal`.
+ * and its inconsistent null handling is contained in this class. Every URL it
+ * calls is named in `appsettings.json` rather than written here.
  */
 export class SamadApiGateway implements SamadGateway {
   /**
@@ -85,14 +92,14 @@ export class SamadApiGateway implements SamadGateway {
   async login(input: LoginInput): Promise<SamadSession> {
     const response = await this.http.request<SamadTokenResponse>({
       universityId: input.universityId,
-      path: '/oauth/token',
+      path: samadRoute('login'),
       method: 'POST',
       extraHeaders: { authorization: SAMAD_MOBILE_BASIC_AUTH },
       formBody: {
         username: input.samadUsername,
         password: input.password,
-        grant_type: 'password',
-        scope: 'read write',
+        grant_type: samadSettings.client.grantType,
+        scope: samadSettings.client.scope,
       },
       onUnauthorized: 'invalid-credentials',
     });
@@ -121,7 +128,7 @@ export class SamadApiGateway implements SamadGateway {
   async listSelfs(universityId: number, accessToken: string): Promise<readonly Self[]> {
     const response = await this.http.request<SamadSelfListResponse>({
       universityId,
-      path: '/rest/reservations/selfs',
+      path: samadRoute('selfs'),
       method: 'GET',
       accessToken,
     });
@@ -139,7 +146,7 @@ export class SamadApiGateway implements SamadGateway {
   async listMealOptions(query: ProgramQuery): Promise<readonly MealOption[]> {
     const response = await this.http.request<SamadProgramsResponse>({
       universityId: query.universityId,
-      path: '/rest/reservations/programs/v2',
+      path: samadRoute('programs'),
       method: 'GET',
       accessToken: query.accessToken,
       query: {
@@ -168,7 +175,10 @@ export class SamadApiGateway implements SamadGateway {
       if (
         typeof program.programId !== 'number' ||
         typeof program.selfId !== 'number' ||
-        typeof program.daysDifferenceWithToday !== 'number'
+        typeof program.daysDifferenceWithToday !== 'number' ||
+        // The reserve call echoes the program's own meal type back to Samad, so a
+        // program without one could only ever be booked with a guessed value.
+        typeof program.mealTypeId !== 'number'
       ) {
         continue;
       }
@@ -196,6 +206,7 @@ export class SamadApiGateway implements SamadGateway {
       options.push({
         programId: program.programId,
         foodTypeId: foodType.foodTypeId,
+        mealTypeId: program.mealTypeId,
         selfId: program.selfId,
         foodName: cleanText(foodType.foodNames, 'غذا'),
         mealTypeName: cleanText(program.mealTypeName, 'وعدهٔ غذایی'),
@@ -212,11 +223,12 @@ export class SamadApiGateway implements SamadGateway {
   async listReserves(query: ReservesQuery): Promise<WeeklyReserves> {
     const response = await this.http.request<SamadReservesResponse>({
       universityId: query.universityId,
-      path: '/rest/reserves',
+      path: samadRoute('reserves'),
       method: 'GET',
       accessToken: query.accessToken,
       query: {
         weekStartDate: query.weekStart === undefined ? '' : formatSamadWeekStart(query.weekStart),
+        selfType: SAMAD_SELF_TYPE,
       },
     });
 
@@ -267,13 +279,16 @@ export class SamadApiGateway implements SamadGateway {
   async reserve(input: ReserveInput): Promise<ReservationOutcome> {
     const response = await this.http.request<SamadReserveResponse>({
       universityId: input.universityId,
-      path: `/rest/reserves/${input.programId}/reserve`,
+      path: samadRoute('reserve', { programId: input.programId }),
       method: 'PUT',
       accessToken: input.accessToken,
+      // Mirrors the web client's `reserve` payload exactly. `mealTypeId` is the
+      // one the program itself reported, not a fixed meal: sending lunch's id for
+      // a dinner program is a request Samad rejects.
       jsonBody: {
         foodTypeId: input.foodTypeId,
         freeFoodSelected: false,
-        mealTypeId: LUNCH_MEAL_TYPE_ID,
+        mealTypeId: input.mealTypeId,
         selected: true,
         selectedCount: 1,
       },
@@ -282,7 +297,10 @@ export class SamadApiGateway implements SamadGateway {
       allowRetry: false,
     });
 
-    const succeeded = (response.type ?? '').toUpperCase() === 'SUCCESS';
+    // Samad signals the outcome two ways depending on the deployment: an envelope
+    // `type` of `SUCCESS`, and a created reservation id in the payload. Either is
+    // a success; requiring both would report a real reservation as a failure.
+    const succeeded = (response.type ?? '').toUpperCase() === 'SUCCESS' || typeof response.payload?.id === 'number';
 
     return {
       succeeded,
@@ -293,7 +311,7 @@ export class SamadApiGateway implements SamadGateway {
   async fetchProfile(universityId: number, accessToken: string): Promise<UserProfile> {
     const response = await this.http.request<SamadProfileResponse>({
       universityId,
-      path: '/rest/users/nurture-profiles',
+      path: samadRoute('profile'),
       method: 'GET',
       accessToken,
     });
@@ -311,12 +329,16 @@ export class SamadApiGateway implements SamadGateway {
     // The university id is used rather than a hard-coded host: the original code
     // always called the KNTU deployment, so students elsewhere got codes that
     // belonged to a different university's database.
+    //
+    // `dailySale` is not optional in the captured client and defaults to false
+    // here: it selects the daily-sale variant of the same endpoint, and omitting
+    // it makes Samad answer about a reservation that does not exist.
     const response = await this.http.request<SamadForgetCodeResponse>({
       universityId,
-      path: '/rest/reservations/forget-card-codes/print',
+      path: samadRoute('forgetCardCode'),
       method: 'GET',
       accessToken,
-      query: { reserveId, count: 1 },
+      query: { reserveId, count: 1, dailySale: 'false' },
     });
 
     const payload = response.payload;

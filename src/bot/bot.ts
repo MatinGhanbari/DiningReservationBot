@@ -146,7 +146,7 @@ export class TelegramBot {
         await handleShowReserves(ctx, services, action.week);
         return;
       case 'reserve-meal':
-        await handleReserveMeal(ctx, services, action.programId, action.foodTypeId);
+        await handleReserveMeal(ctx, services, action.programId, action.foodTypeId, action.mealTypeId);
         return;
       case 'auto-reserve-self':
         await handleSelfChoice(ctx, services, action.selfId);

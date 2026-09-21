@@ -170,6 +170,7 @@ export function mealOption(overrides: Partial<MealOption> = {}): MealOption {
   return {
     programId: 1,
     foodTypeId: 10,
+    mealTypeId: 2,
     selfId: 5,
     foodName: 'چلوکباب',
     mealTypeName: 'ناهار',

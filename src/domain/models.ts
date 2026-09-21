@@ -59,6 +59,13 @@ export interface Self {
 export interface MealOption {
   programId: number;
   foodTypeId: number;
+  /**
+   * The meal slot Samad reported for this program — lunch, dinner, and so on.
+   *
+   * It has to be carried through to the reserve call: the endpoint echoes it back,
+   * so a hard-coded value books the wrong slot or is rejected outright.
+   */
+  mealTypeId: number;
   selfId: number;
   foodName: string;
   mealTypeName: string;
@@ -145,14 +152,6 @@ export interface SamadSession {
   samadUsername: string;
   universityId: number;
 }
-
-/**
- * Which meal slot a reservation targets.
- *
- * Samad's `mealTypeId` is 2 for lunch across every deployment we support. It is
- * named here rather than inlined so the assumption is visible and easy to revisit.
- */
-export const LUNCH_MEAL_TYPE_ID = 2;
 
 export type SupportTicketStatus = 'open' | 'closed';
 export type SupportDirection = 'in' | 'out';

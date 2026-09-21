@@ -61,9 +61,9 @@ export class ReservationService {
     );
   }
 
-  async reserve(telegramId: number, programId: number, foodTypeId: number): Promise<ReservationOutcome> {
+  async reserve(telegramId: number, programId: number, foodTypeId: number, mealTypeId: number): Promise<ReservationOutcome> {
     return this.sessionService.withToken(telegramId, ({ accessToken, universityId }) =>
-      this.gateway.reserve({ universityId, accessToken, programId, foodTypeId }),
+      this.gateway.reserve({ universityId, accessToken, programId, foodTypeId, mealTypeId }),
     );
   }
 

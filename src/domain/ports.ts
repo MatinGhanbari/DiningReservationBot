@@ -122,6 +122,8 @@ export interface ReserveInput {
   accessToken: string;
   programId: number;
   foodTypeId: number;
+  /** The meal slot the program reported; Samad rejects a reservation without it. */
+  mealTypeId: number;
 }
 
 export interface ReservesQuery {
