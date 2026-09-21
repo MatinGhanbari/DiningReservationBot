@@ -72,7 +72,7 @@ const STRAY_REASONING_TAG = new RegExp(`<\\/?(?:${REASONING_NAMES})[^>]*>`, 'gi'
  * stripping those would damage real answers to fix a rarer problem.
  */
 const REASONING_PREAMBLE =
-  /^(?:thinking|thought|reasoning|analysis|reflection|scratchpad|thought process|let me (?:think|analyze|analyse|consider|reason|check)|we (?:need|should|must) (?:to|first)|i (?:need|should|will) (?:to )?(?:think|answer|respond|first)|the user (?:is |has )?(?:ask|asks|asked|wants|wanted|wrote|said|sent)|okay,? (?:the user|so|let)|alright,? (?:the user|so|let)|so,? the user|first,? i\b|step 1\b|تفکر|استدلال|تحلیل|فرایند فکر|بیایید (?:فکر|بررسی|ببینیم)|خب،? کاربر|باشه،? کاربر|بسیار خوب،? کاربر|کاربر (?:می‌پرسد|میپرسد|سؤال|سوال|پرسیده|می‌خواهد|میخواهد)|سؤال کاربر|سوال کاربر)/i;
+  /^(?:thinking|thought|reasoning|analysis|reflection|scratchpad|thought process|thinking process|here(?:'s| is) (?:my |a |the )?(?:thinking|thought|reasoning|analysis|deliberation|chain of thought)|let me (?:think|analyze|analyse|consider|reason|check)|we (?:need|should|must) (?:to|first)|i (?:need|should|will) (?:to )?(?:think|answer|respond|first)|the user (?:is |has )?(?:ask|asks|asked|wants|wanted|wrote|said|sent)|okay,? (?:the user|so|let)|alright,? (?:the user|so|let)|so,? the user|first,? i\b|step 1\b|تفکر|استدلال|تحلیل|فرایند فکر|بیایید (?:فکر|بررسی|ببینیم)|خب،? کاربر|باشه،? کاربر|بسیار خوب،? کاربر|کاربر (?:می‌پرسد|میپرسد|سؤال|سوال|پرسیده|می‌خواهد|میخواهد)|سؤال کاربر|سوال کاربر)/i;
 
 /** A label the model puts in front of the answer, which is a preamble in one word. */
 const LEADING_LABEL = /^(?:پاسخ|جواب|نتیجه|متن پاسخ|answer|response|final answer)\s*[:：]\s*/i;
@@ -100,7 +100,7 @@ const PROMPT_LEAK_MARKERS: readonly string[] = [
 ];
 
 /** Why a completion was thrown away. */
-export type AnswerRejection = 'empty' | 'degenerate' | 'leaked' | 'disclosure' | 'not-persian';
+export type AnswerRejection = 'empty' | 'truncated' | 'degenerate' | 'leaked' | 'disclosure' | 'not-persian';
 
 export interface AnswerAssessment {
   /** The completion after cleaning. Safe to show; still not to be trusted. */
@@ -358,11 +358,18 @@ export function isDegenerate(text: string): boolean {
  * can both log a diagnosis and decide what to do next — retry with a targeted
  * correction, or give up and send the user to a human.
  *
- * The order of the checks is the order of the retry: a leak is corrected as a
- * leak, and only then is the language judged. Reporting an English dump of the
- * system prompt as «not Persian» would send the wrong corrective instruction.
+ * `truncated` is reported by the caller rather than detected here: only the
+ * transport knows whether the completion stopped because it was finished or
+ * because it ran out of room.
+ *
+ * The order of the checks is the order of the retry, and the specific faults come
+ * before the general one: a leak is corrected as a leak, an English answer as an
+ * English answer, and only a completion that is otherwise fine is corrected for
+ * being cut short. Reporting an English dump of the system prompt as «not
+ * Persian» would send the wrong correction, and reporting it as «truncated»
+ * would send an even worse one.
  */
-export function assessAnswer(raw: string): AnswerAssessment {
+export function assessAnswer(raw: string, options: { truncated?: boolean } = {}): AnswerAssessment {
   const text = sanitizeAnswer(raw);
 
   if (text.length === 0) {
@@ -383,6 +390,10 @@ export function assessAnswer(raw: string): AnswerAssessment {
 
   if (!isLikelyPersian(text)) {
     return { text, rejection: 'not-persian' };
+  }
+
+  if (options.truncated === true) {
+    return { text, rejection: 'truncated' };
   }
 
   return { text, rejection: null };
