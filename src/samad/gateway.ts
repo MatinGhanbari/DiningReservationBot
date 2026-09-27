@@ -10,6 +10,7 @@ import type {
 } from '../domain/models';
 import type { LoginInput, ProgramQuery, ReserveInput, ReservesQuery, SamadGateway } from '../domain/ports';
 import { samadRoute, samadSettings } from '../config/appsettings';
+import { toMealDateKey } from '../shared/dates';
 import { RESERVABLE_DAYS_AHEAD } from '../shared/time';
 import { normalizePersianText } from '../shared/persian';
 import { UpstreamRejectedError } from '../shared/errors';
@@ -44,24 +45,26 @@ const SAMAD_SELF_TYPE = samadSettings.client.selfType;
 /**
  * Samad's own week-start format: `YYYY-MM-DD HH:mm:ss`.
  *
+ * A week start is a calendar day, so the time is always midnight and only the
+ * date carries meaning. The date is read in the configured timezone rather than
+ * in the process's own zone: a container running in UTC would otherwise render
+ * Tehran's Saturday as the Friday before it, and Samad would answer about the
+ * wrong week.
+ *
  * The separator is a space, and it has to be a space rather than a `+`.
  *
  * The captured client shows a bare `+` in the query string, but a bare `+` in a
  * query string is form-encoding for a space: the servlet container decodes it
  * back to a space before Samad's own parser ever sees the value. Writing a
  * literal `+` here and letting `URLSearchParams` escape it to `%2B` delivers a
- * plus character instead, which is a different value — and a week start that
- * fails to parse silently degrades to the current week rather than erroring.
+ * plus character instead, which is a different value.
  *
- * Keeping the space reproduces what the captured client actually delivered.
+ * An *empty* value is not the same as an absent one: Samad parses this parameter
+ * as a date and answers `400` to `weekStartDate=`, which is why every caller
+ * names the week it wants instead of leaving the field out.
  */
 export function formatSamadWeekStart(date: Date): string {
-  const pad = (value: number): string => String(value).padStart(2, '0');
-
-  const datePart = [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join('-');
-  const timePart = [pad(date.getHours()), pad(date.getMinutes()), pad(date.getSeconds())].join(':');
-
-  return `${datePart} ${timePart}`;
+  return `${toMealDateKey(date)} 00:00:00`;
 }
 
 /** Parses a date, returning null instead of an Invalid Date. */
@@ -164,7 +167,7 @@ export class SamadApiGateway implements SamadGateway {
       accessToken: query.accessToken,
       query: {
         selfId: query.selfId,
-        weekStartDate: query.weekStart === undefined ? '' : formatSamadWeekStart(query.weekStart),
+        weekStartDate: formatSamadWeekStart(query.weekStart),
       },
     });
 
@@ -240,7 +243,7 @@ export class SamadApiGateway implements SamadGateway {
       method: 'GET',
       accessToken: query.accessToken,
       query: {
-        weekStartDate: query.weekStart === undefined ? '' : formatSamadWeekStart(query.weekStart),
+        weekStartDate: formatSamadWeekStart(query.weekStart),
         selfType: SAMAD_SELF_TYPE,
       },
     });

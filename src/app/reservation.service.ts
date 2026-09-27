@@ -109,12 +109,16 @@ export class ReservationService {
     throw new NotFoundError(`Reservation ${reserveId} not found for this user`, 'این رزرو پیدا نشد. شاید لغو شده باشد.');
   }
 
-  /** The Saturday that starts the requested week, or undefined for the current one. */
-  private weekStartFor(week: WeekSelection): Date | undefined {
-    if (week === 'current') {
-      return undefined;
-    }
+  /**
+   * The Saturday that starts the requested week.
+   *
+   * The current week is named explicitly rather than left to Samad. Leaving it
+   * out used to send `weekStartDate=`, and Samad parses that parameter as a
+   * date: an empty value is a `400`, not "this week".
+   */
+  private weekStartFor(week: WeekSelection): Date {
+    const currentWeekStart = startOfIranianWeek(this.clock.now());
 
-    return addWeeks(startOfIranianWeek(this.clock.now()), 1);
+    return week === 'current' ? currentWeekStart : addWeeks(currentWeekStart, 1);
   }
 }

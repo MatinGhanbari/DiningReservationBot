@@ -168,6 +168,8 @@ describe('SamadHttpClient', () => {
 describe('SamadApiGateway', () => {
   const request = vi.fn();
   const gateway = new SamadApiGateway({ request } as never);
+  /** Any Saturday will do: the gateway formats it, these tests never assert on it. */
+  const weekStart = new Date(2026, 8, 19);
 
   it('formats a week start the way Samad expects', () => {
     // A space, not a `+`: the query encoder turns it into the bare `+` the
@@ -214,7 +216,7 @@ describe('SamadApiGateway', () => {
       },
     });
 
-    const meals = await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5 });
+    const meals = await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5, weekStart });
 
     expect(meals).toHaveLength(2);
     expect(meals[0]?.foodName).toBe('چلوکباب');
@@ -247,7 +249,7 @@ describe('SamadApiGateway', () => {
       },
     });
 
-    const meals = await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5 });
+    const meals = await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5, weekStart });
 
     // The boundary is inclusive: exactly RESERVABLE_DAYS_AHEAD is bookable, one
     // day closer is not.
@@ -281,7 +283,7 @@ describe('SamadApiGateway', () => {
       },
     });
 
-    const meals = await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5 });
+    const meals = await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5, weekStart });
 
     expect(meals.map(meal => meal.foodName)).toEqual(['آزاد']);
   });
@@ -309,6 +311,7 @@ describe('SamadApiGateway', () => {
       universityId: 8,
       accessToken: 't',
       selfId: 5,
+      weekStart,
       minimumDaysAhead: 0,
       includeReserved: true,
     });
@@ -327,7 +330,7 @@ describe('SamadApiGateway', () => {
       },
     });
 
-    expect(await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5 })).toEqual([]);
+    expect(await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5, weekStart })).toEqual([]);
   });
 
   it('skips a program with no meal type, which could not be booked correctly', async () => {
@@ -348,7 +351,7 @@ describe('SamadApiGateway', () => {
       },
     });
 
-    expect(await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5 })).toEqual([]);
+    expect(await gateway.listMealOptions({ universityId: 8, accessToken: 't', selfId: 5, weekStart })).toEqual([]);
   });
 
   it('flattens reservations across days and meal types', async () => {
@@ -396,7 +399,7 @@ describe('SamadApiGateway', () => {
       },
     });
 
-    const reserves = await gateway.listReserves({ universityId: 8, accessToken: 't' });
+    const reserves = await gateway.listReserves({ universityId: 8, accessToken: 't', weekStart });
 
     expect(reserves.meals).toHaveLength(2);
     expect(reserves.remainingCreditRial).toBe(250_000);
@@ -420,7 +423,7 @@ describe('SamadApiGateway', () => {
       },
     });
 
-    const reserves = await gateway.listReserves({ universityId: 8, accessToken: 't' });
+    const reserves = await gateway.listReserves({ universityId: 8, accessToken: 't', weekStart });
 
     expect(reserves.meals).toEqual([]);
   });

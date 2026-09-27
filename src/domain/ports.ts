@@ -105,8 +105,14 @@ export interface ProgramQuery {
   universityId: number;
   accessToken: string;
   selfId: number;
-  /** Week to look at; omitted means the current week. */
-  weekStart?: Date;
+  /**
+   * The Saturday that starts the week to read.
+   *
+   * Required, and deliberately not defaulted: Samad parses this as a date and
+   * answers `400` when it arrives empty, so "no week" has to be resolved into a
+   * real day by the caller rather than passed along as an absence.
+   */
+  weekStart: Date;
   /**
    * Minimum days ahead a meal must be to appear.
    *
@@ -130,8 +136,8 @@ export interface ReserveInput {
 export interface ReservesQuery {
   universityId: number;
   accessToken: string;
-  /** Week to look at; omitted means the current week. */
-  weekStart?: Date;
+  /** The Saturday that starts the week to read. Required for the same reason as `ProgramQuery.weekStart`. */
+  weekStart: Date;
 }
 
 /**

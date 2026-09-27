@@ -64,6 +64,28 @@ function timezoneOffsetMs(instant: Date): number {
 }
 
 /**
+ * The instant midnight started for a `YYYY-MM-DD` key, in the configured
+ * timezone.
+ *
+ * Every calendar day in this module is a day in `config.TZ`, never in the
+ * process's own zone. That distinction matters because the container's `TZ` is a
+ * deployment detail: a process running in UTC and a user living in Tehran
+ * disagree about which day it is for three and a half hours of every day, and a
+ * day computed in the wrong one is wrong in a way nobody notices until a meal
+ * shows up on the wrong date.
+ */
+function configuredMidnightForKey(key: string): Date {
+  const [year, month, day] = key.split('-').map(Number);
+
+  if (year === undefined || month === undefined || day === undefined) {
+    return new Date(Number.NaN);
+  }
+
+  const utcMidnight = Date.UTC(year, month - 1, day);
+  return new Date(utcMidnight - timezoneOffsetMs(new Date(utcMidnight)));
+}
+
+/**
  * The instant midnight started, in the configured timezone.
  *
  * Used for anything that resets on a calendar day — the chatbot's daily
@@ -72,14 +94,36 @@ function timezoneOffsetMs(instant: Date): number {
  * at the start of the day.
  */
 export function startOfConfiguredDay(now: Date = new Date()): Date {
-  const [year, month, day] = toMealDateKey(now).split('-').map(Number);
+  return configuredMidnightForKey(toMealDateKey(now));
+}
 
-  if (year === undefined || month === undefined || day === undefined) {
-    return new Date(Number.NaN);
+/**
+ * Shifts a `YYYY-MM-DD` key by whole days.
+ *
+ * The arithmetic happens on the key rather than on an instant, so adding a day
+ * can never be swallowed by a daylight-saving transition or land back on the day
+ * it started from.
+ */
+function shiftDayKey(key: string, days: number): string {
+  const [year, month, day] = key.split('-').map(Number);
+
+  if (year === undefined || month === undefined || day === undefined || !Number.isFinite(days)) {
+    return key;
   }
 
-  const utcMidnight = Date.UTC(year, month - 1, day);
-  return new Date(utcMidnight - timezoneOffsetMs(new Date(utcMidnight)));
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+/** The weekday of a `YYYY-MM-DD` key, where 0 is Sunday as in `Date#getDay`. */
+function weekdayOfDayKey(key: string): number {
+  const [year, month, day] = key.split('-').map(Number);
+
+  if (year === undefined || month === undefined || day === undefined) {
+    return Number.NaN;
+  }
+
+  // Anchored at noon so no offset can push the answer onto a neighbouring day.
+  return new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay();
 }
 
 /** Parses a `YYYY-MM-DD` key into a Date at local midnight. */
@@ -105,17 +149,21 @@ export function addWeeks(date: Date, weeks: number): Date {
 }
 
 /**
- * The Saturday that starts the week containing `date`.
+ * The Saturday that starts the week containing `date`, at midnight in the
+ * configured timezone.
  *
  * The Iranian week runs Saturday to Friday, so the ISO week helpers in most
  * libraries point at the wrong boundary here.
+ *
+ * Both the weekday and the day itself are resolved in `config.TZ`. Reading the
+ * weekday off the instant with `getDay()` would answer in the process's own
+ * zone, which is a different day from the user's for part of every day.
  */
 export function startOfIranianWeek(date: Date): Date {
-  const dayOfWeek = date.getDay(); // 0 = Sunday
-  const daysSinceSaturday = (dayOfWeek + 1) % 7;
-  const start = addDays(date, -daysSinceSaturday);
-  start.setHours(0, 0, 0, 0);
-  return start;
+  const dayKey = toMealDateKey(date);
+  const daysSinceSaturday = (weekdayOfDayKey(dayKey) + 1) % 7;
+
+  return configuredMidnightForKey(shiftDayKey(dayKey, -daysSinceSaturday));
 }
 
 /** Whole days from `from` to `to`, counted by calendar day. */
