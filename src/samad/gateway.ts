@@ -41,14 +41,27 @@ const SAMAD_MOBILE_BASIC_AUTH = samadSettings.client.basicAuth;
  */
 const SAMAD_SELF_TYPE = samadSettings.client.selfType;
 
-/** Samad's own week-start format: `YYYY-MM-DD+HH:mm:ss`. */
+/**
+ * Samad's own week-start format: `YYYY-MM-DD HH:mm:ss`.
+ *
+ * The separator is a space, and it has to be a space rather than a `+`.
+ *
+ * The captured client shows a bare `+` in the query string, but a bare `+` in a
+ * query string is form-encoding for a space: the servlet container decodes it
+ * back to a space before Samad's own parser ever sees the value. Writing a
+ * literal `+` here and letting `URLSearchParams` escape it to `%2B` delivers a
+ * plus character instead, which is a different value — and a week start that
+ * fails to parse silently degrades to the current week rather than erroring.
+ *
+ * Keeping the space reproduces what the captured client actually delivered.
+ */
 export function formatSamadWeekStart(date: Date): string {
   const pad = (value: number): string => String(value).padStart(2, '0');
 
   const datePart = [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join('-');
   const timePart = [pad(date.getHours()), pad(date.getMinutes()), pad(date.getSeconds())].join(':');
 
-  return `${datePart}+${timePart}`;
+  return `${datePart} ${timePart}`;
 }
 
 /** Parses a date, returning null instead of an Invalid Date. */

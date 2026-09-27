@@ -170,7 +170,9 @@ describe('SamadApiGateway', () => {
   const gateway = new SamadApiGateway({ request } as never);
 
   it('formats a week start the way Samad expects', () => {
-    expect(formatSamadWeekStart(new Date(2026, 8, 19, 0, 0, 0))).toBe('2026-09-19+00:00:00');
+    // A space, not a `+`: the query encoder turns it into the bare `+` the
+    // captured client sends, whereas a literal `+` would become `%2B`.
+    expect(formatSamadWeekStart(new Date(2026, 8, 19, 0, 0, 0))).toBe('2026-09-19 00:00:00');
   });
 
   it('keeps only dining halls that carry an id', async () => {
