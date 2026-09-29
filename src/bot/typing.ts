@@ -108,7 +108,7 @@ export async function sendTyping(ctx: Context, options: { force?: boolean } = {}
     return;
   }
 
-  await shared.show(chatId, () => ctx.telegram.sendChatAction(chatId, 'typing'), options);
+  await shared.show(chatId, () => ctx.telegram.sendChatAction(`${chatId}`, 'typing'), options);
 }
 
 /**
