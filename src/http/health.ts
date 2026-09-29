@@ -132,6 +132,12 @@ export class HealthServer {
         return;
       }
 
+      // The match above ignores the query string, but Telegraf's own filter
+      // compares `req.url` against the route exactly, so a query the proxy
+      // appended would be rejected as a 403 by the layer this one just accepted
+      // it for. Hand it the URL it is expecting to see.
+      request.url = webhook.path;
+
       await webhook.handler(request, response);
       return;
     }

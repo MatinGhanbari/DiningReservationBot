@@ -157,6 +157,7 @@ matter most:
 | `SAMAD_BASIC_AUTH` | empty | Samad client credential, `Basic <base64>`. Empty makes the Samad login fail with `401` |
 | `DATABASE_PATH` | `./data/bot.db` | SQLite file path |
 | `TELEGRAM_WEBHOOK_URL` | empty | Public HTTPS webhook address. Empty means long polling |
+| `TELEGRAM_WEBHOOK_PATH` | empty | Local route to serve the webhook on, when a proxy rewrites the path. Empty means the URL's own path |
 | `TELEGRAM_WEBHOOK_SECRET` | empty | Webhook secret, to reject forged requests |
 | `AUTO_RESERVE_CRON` | `0 7 * * *` | Time of the daily auto-reserve run |
 | `CREDIT_CHECK_CRON` | `0 20 * * *` | Time of the daily credit check |
@@ -229,6 +230,23 @@ receives Telegram's requests, so only one port is needed. Telegram accepts only
 ports `443`, `80`, `88` and `8443`. The webhook path is the path of the URL, so
 `https://bot.example.com/telegram/webhook` is answered on `/telegram/webhook`.
 
+That holds while the proxy forwards the path unchanged. A gateway that **strips a
+prefix** — one that answers `https://host/api/<id>/…` by forwarding `…` — hands
+the bot `/` instead, and the delivery lands on a route nothing serves. The
+symptom is a `405 Method Not Allowed` in `getWebhookInfo`, because a `POST` to an
+unmatched path is what the server rejects with. Set `TELEGRAM_WEBHOOK_PATH` to
+the path that actually arrives; Telegram keeps posting to the URL's own path and
+only the local route changes:
+
+```env
+TELEGRAM_WEBHOOK_URL=https://host/api/<id>/
+TELEGRAM_WEBHOOK_PATH=/
+```
+
+To tell which kind of proxy you are behind, ask it for a route whose answer is
+unmistakable and read the body — if `/api/<id>/health` returns the bot's own
+`{"status":"ok","uptimeSeconds":…}`, the prefix is being stripped.
+
 ```env
 NODE_ENV=production
 PORT=80
@@ -241,6 +259,10 @@ TELEGRAM_WEBHOOK_SECRET=<openssl rand -hex 32>
 > and active sessions. Put the service behind a TLS reverse proxy that forwards
 > only the webhook path, and always set `TELEGRAM_WEBHOOK_SECRET` so that a
 > request without the `X-Telegram-Bot-Api-Secret-Token` header is rejected.
+> A proxy configured for a whole prefix rather than a single path forwards
+> `/health` and `/ready` too — check `GET <prefix>/ready` from the public
+> internet, and if it answers, the service is reporting its user count to
+> anyone who asks.
 
 ---
 

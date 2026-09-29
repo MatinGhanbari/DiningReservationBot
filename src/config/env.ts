@@ -132,6 +132,17 @@ const EnvSchema = z.object({
    */
   TELEGRAM_WEBHOOK_URL: z.union([z.literal(''), z.string().url()]).default(''),
   /**
+   * The local route Telegram's deliveries are served on, when a reverse proxy
+   * rewrites the path before forwarding.
+   *
+   * Telegram posts to the path of `TELEGRAM_WEBHOOK_URL`, so the two are the
+   * same behind a proxy that forwards the path unchanged — which is why this is
+   * empty by default. A gateway that strips a prefix (public
+   * `https://host/api/<id>/…` arriving as `…`) has to have the rewritten path
+   * spelled out here, or the delivery lands on a route nothing serves.
+   */
+  TELEGRAM_WEBHOOK_PATH: z.string().default(''),
+  /**
    * Telegram echoes this value back on every delivery in the
    * `X-Telegram-Bot-Api-Secret-Token` header, and the bot rejects any request
    * that arrives without it. Optional, but without it anyone who learns the URL
@@ -263,8 +274,25 @@ export const isTest = config.NODE_ENV === 'test';
  */
 export const webhookUrl: string = isProduction ? config.TELEGRAM_WEBHOOK_URL.trim() : '';
 
-/** The route the webhook is served on, or null when the bot long-polls. */
-export const webhookPath: string | null = webhookUrl.length === 0 ? null : new URL(webhookUrl).pathname;
+/**
+ * The route the webhook is served on, or null when the bot long-polls.
+ *
+ * Normally this is the path of the public URL, because a reverse proxy forwards
+ * the path unchanged. That assumption is what `TELEGRAM_WEBHOOK_PATH` exists to
+ * break: behind a gateway that strips a prefix, Telegram still posts to the
+ * URL's own path while the request that actually arrives carries the rest.
+ */
+export const webhookPath: string | null = webhookUrl.length === 0 ? null : resolveWebhookPath();
+
+function resolveWebhookPath(): string {
+  const override = config.TELEGRAM_WEBHOOK_PATH.trim();
+
+  if (override.length === 0) {
+    return new URL(webhookUrl).pathname;
+  }
+
+  return override.startsWith('/') ? override : `/${override}`;
+}
 
 const ADMIN_IDS: ReadonlySet<number> = new Set(config.ADMINS);
 
