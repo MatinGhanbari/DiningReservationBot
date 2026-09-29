@@ -120,14 +120,9 @@ export class AdminService {
     };
   }
 
-  /**
-   * When each scheduled job fires next.
-   *
-   * `now` is passed in rather than read here so the countdown the panel renders
-   * is measured from the same instant it was rendered at.
-   */
-  schedule(now: Date): readonly ScheduledJobTiming[] {
-    return this.scheduler.upcoming(now);
+  /** When each scheduled job fires next, in the bot's timezone. */
+  schedule(): readonly ScheduledJobTiming[] {
+    return this.scheduler.upcoming();
   }
 
   /** The most recently created users, newest first. */

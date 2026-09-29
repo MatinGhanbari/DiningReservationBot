@@ -444,7 +444,7 @@ async function onSchedule(ctx: Context, services: BotServices): Promise<void> {
 
   const now = services.clock.now();
 
-  const rows = services.admin.schedule(now).map(job =>
+  const rows = services.admin.schedule().map(job =>
     copy.admin.scheduleRow({
       name: copy.admin.scheduleJobName(job.name),
       expression: job.expression,

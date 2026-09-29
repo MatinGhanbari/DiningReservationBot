@@ -1,22 +1,8 @@
 import cron, { type ScheduledTask } from 'node-cron';
 import { config } from '../config/env';
 import { scopedLogger } from '../shared/logger';
-import { MINUTE } from '../shared/time';
 
 const log = scopedLogger('scheduler');
-
-/** How far ahead a next-run search looks: one year, so a yearly expression still resolves. */
-const LOOKAHEAD_MINUTES = 366 * 24 * 60;
-
-/** The part of node-cron's matcher that answers "does this instant match?". */
-interface CronTimeMatcher {
-  match(date: Date): boolean;
-}
-
-/** node-cron holds its matcher on a field its own typings do not describe. */
-interface ScheduledTaskInternals {
-  _scheduler?: { timeMatcher?: CronTimeMatcher };
-}
 
 export interface ScheduledJob {
   name: string;
@@ -28,7 +14,7 @@ export interface ScheduledJob {
 export interface ScheduledJobTiming {
   name: string;
   expression: string;
-  /** Null when the expression has no match within the lookahead window. */
+  /** Null when the task is stopped, or has no match in node-cron's search window. */
   nextRunAt: Date | null;
 }
 
@@ -47,7 +33,7 @@ export interface ScheduledJobTiming {
 export class Scheduler {
   private readonly tasks: ScheduledTask[] = [];
 
-  private readonly registered: Array<{ name: string; expression: string; matcher: CronTimeMatcher | null }> = [];
+  private readonly registered: Array<{ name: string; expression: string; task: ScheduledTask }> = [];
 
   start(jobs: readonly ScheduledJob[]): void {
     for (const job of jobs) {
@@ -65,7 +51,7 @@ export class Scheduler {
       );
 
       this.tasks.push(task);
-      this.registered.push({ name: job.name, expression: job.expression, matcher: matcherOf(task) });
+      this.registered.push({ name: job.name, expression: job.expression, task });
 
       log.info({ job: job.name, expression: job.expression, timezone: config.TZ }, 'scheduled job registered');
     }
@@ -74,14 +60,14 @@ export class Scheduler {
   /**
    * When each registered job fires next, in `config.TZ`.
    *
-   * The matcher is taken off the task that is actually scheduled, so what the
-   * panel shows and what the timer does cannot drift apart.
+   * The answer comes from the task that is actually scheduled, so what the panel
+   * shows and what the timer does cannot drift apart.
    */
-  upcoming(now: Date): readonly ScheduledJobTiming[] {
+  upcoming(): readonly ScheduledJobTiming[] {
     return this.registered.map(job => ({
       name: job.name,
       expression: job.expression,
-      nextRunAt: job.matcher === null ? null : nextRunAfter(job.matcher, now),
+      nextRunAt: job.task.getNextRun(),
     }));
   }
 
@@ -108,31 +94,4 @@ export class Scheduler {
       log.error({ err: error, job: job.name }, 'scheduled job failed');
     }
   }
-}
-
-/**
- * Reads node-cron's own matcher off a scheduled task.
- *
- * Null when the internals move under us, which the panel reports as an unknown
- * next run rather than failing the screen.
- */
-function matcherOf(task: ScheduledTask): CronTimeMatcher | null {
-  const matcher = (task as unknown as ScheduledTaskInternals)._scheduler?.timeMatcher;
-
-  return matcher !== undefined && typeof matcher.match === 'function' ? matcher : null;
-}
-
-/** The first whole minute after `from` the expression matches. */
-function nextRunAfter(matcher: CronTimeMatcher, from: Date): Date | null {
-  const start = Math.ceil((from.getTime() + 1) / MINUTE) * MINUTE;
-
-  for (let offset = 0; offset < LOOKAHEAD_MINUTES; offset += 1) {
-    const candidate = new Date(start + offset * MINUTE);
-
-    if (matcher.match(candidate)) {
-      return candidate;
-    }
-  }
-
-  return null;
 }
