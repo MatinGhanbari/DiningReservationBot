@@ -1,0 +1,189 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { scopedLogger } from '../shared/logger';
+
+const log = scopedLogger('health');
+
+export interface HealthReport {
+  status: 'ok' | 'degraded';
+  uptimeSeconds: number;
+  details: Record<string, unknown>;
+}
+
+/**
+ * A route owned by another layer, served on the same listener.
+ *
+ * Only the Telegram webhook uses this. It shares the port on purpose: Telegram
+ * delivers to 443, 80, 88 or 8443, and the container already binds one of them,
+ * so a second listener would only mean a second public port to secure.
+ */
+export interface WebhookRoute {
+  /** The exact path the deliveries arrive on. */
+  path: string;
+  handler: (request: IncomingMessage, response: ServerResponse) => Promise<void>;
+}
+
+export interface HealthServerOptions {
+  port: number;
+  /** Runs the readiness checks. Throwing marks the service as not ready. */
+  check: () => Promise<HealthReport>;
+  /** Optional extra route, served alongside the health endpoints. */
+  webhook?: WebhookRoute;
+}
+
+/**
+ * A deliberately tiny HTTP server.
+ *
+ * The original project shipped Express, Swagger, CORS, helmet, compression,
+ * hpp and morgan for an API whose every route was empty — the only thing that
+ * ever answered was `GET /` returning 200. That is eight dependencies, a routing
+ * layer and a documentation surface to keep patched, in service of nothing.
+ *
+ * What a container actually needs is three answers: "is this process alive?",
+ * "can it do useful work?", and — in production — "here is an update from
+ * Telegram". `node:http` provides all three in a few lines, with no
+ * dependencies at all.
+ *
+ *   GET  /health — liveness. Always 200 while the process is running.
+ *   GET  /ready  — readiness. 200 only when the database and the bot are usable.
+ *   POST <webhook path> — Telegram updates, only when a webhook is configured.
+ */
+export class HealthServer {
+  private server: Server | null = null;
+
+  private readonly startedAt = Date.now();
+
+  constructor(private readonly options: HealthServerOptions) {}
+
+  async start(): Promise<void> {
+    if (this.server !== null) {
+      return;
+    }
+
+    this.server = createServer((request, response) => {
+      this.handle(request, response).catch(error => {
+        log.error({ err: error }, 'http request failed');
+
+        // The webhook handler writes its own response, so by the time an error
+        // reaches here the headers may already be out. Writing them twice would
+        // throw, and an unhandled rejection shuts the whole process down.
+        if (!response.headersSent) {
+          this.respond(response, 500, { status: 'error' });
+        } else if (!response.writableEnded) {
+          response.end();
+        }
+      });
+    });
+
+    // Node's default request timeout is generous; a health probe should never
+    // hold a socket open for long.
+    this.server.keepAliveTimeout = 5_000;
+    this.server.headersTimeout = 10_000;
+
+    await new Promise<void>((resolve, reject) => {
+      this.server?.once('error', reject);
+      this.server?.listen(this.options.port, '0.0.0.0', () => {
+        this.server?.removeListener('error', reject);
+        resolve();
+      });
+    });
+
+    log.info({ port: this.options.port }, 'health server listening');
+  }
+
+  async stop(): Promise<void> {
+    const server = this.server;
+
+    if (server === null) {
+      return;
+    }
+
+    this.server = null;
+
+    await new Promise<void>(resolve => {
+      server.close(() => resolve());
+      // Idle keep-alive sockets would otherwise delay the close indefinitely.
+      server.closeIdleConnections();
+    });
+  }
+
+  /**
+   * The port actually bound.
+   *
+   * Differs from the configured value when port 0 was requested, which is how
+   * the test suite avoids colliding with anything already listening.
+   */
+  get boundPort(): number | null {
+    const address = this.server?.address();
+
+    if (address === null || address === undefined || typeof address === 'string') {
+      return null;
+    }
+
+    return address.port;
+  }
+
+  private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const path = (request.url ?? '/').split('?')[0];
+    const webhook = this.options.webhook;
+
+    if (webhook !== undefined && path === webhook.path) {
+      if (request.method !== 'POST') {
+        this.respond(response, 405, { status: 'error', message: 'method not allowed' });
+        return;
+      }
+
+      await webhook.handler(request, response);
+      return;
+    }
+
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      this.respond(response, 405, { status: 'error', message: 'method not allowed' });
+      return;
+    }
+
+    if (path === '/health') {
+      this.respond(response, 200, {
+        status: 'ok',
+        uptimeSeconds: Math.round((Date.now() - this.startedAt) / 1_000),
+      });
+      return;
+    }
+
+    if (path === '/ready') {
+      try {
+        const report = await this.options.check();
+        this.respond(response, report.status === 'ok' ? 200 : 503, {
+          status: report.status,
+          uptimeSeconds: report.uptimeSeconds,
+          ...report.details,
+        });
+      } catch (error) {
+        // The reason is logged, not returned. An internal error message can carry
+        // a SQL fragment, a file path or a connection string, and a readiness
+        // endpoint is not a place to hand those out — the detail belongs in the
+        // log where it is already visible to whoever operates this.
+        log.error({ err: error }, 'readiness check failed');
+
+        this.respond(response, 503, { status: 'degraded', reason: 'dependency unavailable' });
+      }
+      return;
+    }
+
+    this.respond(response, 404, { status: 'error', message: 'not found' });
+  }
+
+  private respond(response: ServerResponse, statusCode: number, body: unknown): void {
+    const payload = JSON.stringify(body);
+
+    response.writeHead(statusCode, {
+      'content-type': 'application/json; charset=utf-8',
+      'content-length': Buffer.byteLength(payload),
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+      'referrer-policy': 'no-referrer',
+    });
+
+    response.end(payload);
+  }
+}

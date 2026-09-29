@@ -1,0 +1,36 @@
+# Never put secrets in the image
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules
+dist
+coverage
+*.tsbuildinfo
+
+# Database
+data
+*.db
+*.db-wal
+*.db-shm
+
+# Git and development tooling
+.git
+.gitignore
+.vscode
+.idea
+.github
+
+# Documentation and files not needed at runtime
+docs
+*.md
+!README.md
+
+# Tests
+tests
+vitest.config.ts
+
+# Logs
+logs
+*.log

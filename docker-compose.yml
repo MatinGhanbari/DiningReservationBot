@@ -1,0 +1,102 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Dining reservation bot — single-server deployment
+#
+#  Why one container and not several: conversation state and sessions are held
+#  in this process's memory, and the auto-reserve scheduler runs inside the same
+#  process. With two replicas up, a user is lost mid-wizard depending on which
+#  container their message reaches, and both replicas run auto-reserve at the
+#  same time. Scaling horizontally here means moving the cache to a shared
+#  service.
+#
+#  Getting started:
+#      cp .env.example .env      # and fill in the values
+#      docker compose up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: dining-reservation-bot
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+
+    image: dining-reservation-bot:1.0.0
+
+    # Secrets and configuration come from .env and are never copied into the
+    # image.
+    env_file:
+      - .env
+
+    # These take precedence over the values in .env, because in a Docker
+    # deployment the database path has to be on the volume rather than in the
+    # project's relative directory.
+    environment:
+      NODE_ENV: production
+      DATABASE_PATH: /app/data/bot.db
+      TZ: ${TZ:-Asia/Tehran}
+
+    volumes:
+      # The only data that has to outlive the container: the SQLite file and the
+      # WAL beside it. Losing this volume means every user has to sign in again.
+      - bot-data:/app/data
+
+    ports:
+      # The health server — and, in webhook mode, the delivery of Telegram
+      # updates — are served on this one port, so the number has to match PORT
+      # in .env.
+      #
+      # By default it is published on loopback only, because /health and /ready
+      # have no authentication and expose the number of users and active
+      # sessions to anyone who asks.
+      #
+      # If you have set TELEGRAM_WEBHOOK_URL, this port has to be reachable from
+      # outside. Recommended: put it behind a TLS reverse proxy and forward only
+      # the webhook path, then change this line to
+      #     - '${PORT:-3000}:${PORT:-3000}'
+      - '127.0.0.1:${PORT:-3000}:${PORT:-3000}'
+
+    restart: unless-stopped
+
+    # The process gets up to 8 seconds on SIGTERM; this number is slightly
+    # higher so Docker reaches it before SIGKILL and the final WAL checkpoint
+    # runs.
+    stop_grace_period: 15s
+
+    # The healthcheck is defined in the Dockerfile so it is maintained in one
+    # place. Restarting automatically when the container turns unhealthy is not
+    # wanted here: the restart policy above only reacts to process exit, and a
+    # live but broken process is not improved by a blind restart.
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
+    # The container is read-only by default; only the database volume and /tmp
+    # are writable. If an attacker comes in through a dependency, they cannot
+    # change the executable or the code on disk.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+    # Stops the process from gaining extra privileges through setuid bits.
+    security_opt:
+      - no-new-privileges:true
+
+    # Logs go to stdout as JSON; this setting keeps endless logs from filling
+    # the server's disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+volumes:
+  bot-data:
+    driver: local

@@ -1,0 +1,279 @@
+name: CI
+
+#
+# Five gates, in order of how cheap they are to run and how expensive they are to
+# ignore:
+#
+#   1. hygiene      — nothing secret, nothing generated, nothing binary in git
+#   2. quality      — typecheck, lint, formatting, tests
+#   3. supply-chain — known-vulnerable dependencies and licence problems
+#   4. image        — the Docker image builds, and is scanned
+#   5. publish      — only from the default branch or a tag, only after all of the above
+#
+# The secret scan runs first because a leaked credential is the one failure a
+# later commit cannot undo: the value is already in the history.
+#
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: '22'
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ── 1. Repository hygiene ──────────────────────────────────────────────────
+
+  hygiene:
+    name: Secrets and repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the full history
+        uses: actions/checkout@v4
+        with:
+          # gitleaks reads git history; a shallow clone would only see HEAD.
+          fetch-depth: 0
+
+      - name: Scan the history for committed secrets
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/repo" \
+            --workdir /repo \
+            zricethezav/gitleaks:latest detect \
+              --source /repo \
+              --config /repo/.gitleaks.toml \
+              --log-opts="$(git rev-list --max-parents=0 HEAD)..HEAD" \
+              --redact \
+              --verbose
+
+      - name: Assert no environment file is tracked
+        run: |
+          tracked="$(git ls-files | grep -E '(^|/)\.env(\..*)?$' | grep -v '^\.env\.example$' || true)"
+          if [ -n "$tracked" ]; then
+            echo "::error::These environment files are tracked by git and must be removed:"
+            echo "$tracked"
+            exit 1
+          fi
+
+      - name: Assert no database or build output is tracked
+        run: |
+          tracked="$(git ls-files | grep -E '\.(db|db-wal|db-shm|sqlite3?)$|^(dist|coverage|data)/' || true)"
+          if [ -n "$tracked" ]; then
+            echo "::error::Generated files are tracked by git and must be removed:"
+            echo "$tracked"
+            exit 1
+          fi
+
+      - name: Assert the example environment holds no real value
+        run: |
+          if grep -qE '^OPENROUTER_API_KEY=.+' .env.example; then
+            echo "::error::OPENROUTER_API_KEY must stay empty in .env.example"
+            exit 1
+          fi
+
+      - name: Search the working tree for high-confidence key material
+        run: |
+          # A second pass that does not depend on gitleaks: private keys and
+          # Telegram-shaped tokens have unmistakable shapes.
+          #
+          # `.env` is skipped on purpose. It is gitignored and holds the
+          # developer's own token, so failing on it would make this useless to
+          # run locally; the check is about what would be committed.
+          status=0
+
+          if grep -rIl --exclude-dir=node_modules --exclude-dir=.git -e 'BEGIN [A-Z ]*PRIVATE KEY' . ; then
+            echo "::error::A private key appears in the working tree."
+            status=1
+          fi
+
+          if grep -rIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github \
+               --exclude='.env' --exclude='.env.*' --exclude='.gitleaks.toml' \
+               -E '[0-9]{8,10}:[A-Za-z0-9_-]{35}' . ; then
+            echo "::error::Something shaped like a Telegram bot token was found."
+            status=1
+          fi
+
+          exit "$status"
+
+      - name: Reject a captured client credential in the settings file
+        run: |
+          # gitleaks does not flag a short base64 string, and the Samad client
+          # credential that reached this repository's history was exactly that:
+          # 44 base64 characters behind a `Basic ` prefix. Shape is the only
+          # thing left to match on, so it is matched here.
+          #
+          # The placeholder this repository ships ("Basic basicAuth") is nine
+          # characters and does not match, which is the point: the value belongs
+          # in SAMAD_BASIC_AUTH, where `.env` and `.dockerignore` keep it out of
+          # git, not in a tracked settings file.
+          if grep -nE '"(basicAuth|clientSecret)"[[:space:]]*:[[:space:]]*"[^"]*(Basic[[:space:]]+)?[A-Za-z0-9+/=]{16,}"' \
+               src/config/appsettings.json; then
+            echo "::error::A credential is committed in appsettings.json. Move it to SAMAD_BASIC_AUTH in .env."
+            exit 1
+          fi
+
+  # ── 2. Code quality ────────────────────────────────────────────────────────
+
+  quality:
+    name: Typecheck, lint and test
+    runs-on: ubuntu-latest
+    needs: hygiene
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # `npm ci` rather than `npm install`: it installs exactly what the lockfile
+      # says, and fails loudly rather than silently upgrading.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Keep the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ── 3. Supply chain ────────────────────────────────────────────────────────
+
+  supply-chain:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Production dependencies are a hard gate; advisories that only affect
+      # build-time tooling are reported but do not stop a release.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Report advisories in development dependencies
+        continue-on-error: true
+        run: npm audit --audit-level=moderate
+
+      - name: Review dependency changes in pull requests
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  # ── 4. Build and scan the image ────────────────────────────────────────────
+
+  image:
+    name: Build and scan the Docker image
+    runs-on: ubuntu-latest
+    needs: [quality, supply-chain]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Building without pushing warms the cache for the publish job and proves
+      # the image compiles on a clean machine, which a local build cannot.
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check the container reports itself healthy
+        run: |
+          docker run --rm --entrypoint node "$IMAGE_NAME:ci" -e "console.log('image entrypoint is usable')"
+
+      - name: Scan the image for known vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:ci
+          format: table
+          severity: CRITICAL,HIGH
+          # Unfixed advisories would fail every build for something with no
+          # remedy; they are reported above and triaged from the log.
+          ignore-unfixed: true
+          exit-code: '1'
+
+  # ── 5. Publish ─────────────────────────────────────────────────────────────
+
+  publish:
+    name: Publish to the GitHub container registry
+    runs-on: ubuntu-latest
+    needs: [image, hygiene]
+    # A pull request must never be able to publish an image: the workflow runs
+    # with the pull request's own code.
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to the container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive the image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=,format=long
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

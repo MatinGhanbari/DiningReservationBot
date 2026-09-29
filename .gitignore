@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Database and SQLite side files
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Tooling and operating system
+.DS_Store
+Thumbs.db
+.workbuddy-ai/
+.cursor/
+.claude/
+.idea/
+.vscode/
+.cache/
+.eslintcache
+*.ps1
