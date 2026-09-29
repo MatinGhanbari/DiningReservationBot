@@ -16,13 +16,17 @@
 name: dining-reservation-bot
 
 services:
-  bot:
+  dining-reservation-bot:
+    container_name: dining-reservation-bot
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime
 
     image: dining-reservation-bot:1.0.0
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
 
     # Secrets and configuration come from .env and are never copied into the
     # image.
