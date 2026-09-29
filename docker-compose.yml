@@ -17,7 +17,7 @@ name: dining-reservation-bot
 
 services:
   dining-reservation-bot:
-    container_name: dining-reservation-bot
+    container_name: zeeabad5-8b25-4a7d-8ed1-f3f1516aaed6
     build:
       context: .
       dockerfile: Dockerfile
@@ -59,7 +59,7 @@ services:
       # outside. Recommended: put it behind a TLS reverse proxy and forward only
       # the webhook path, then change this line to
       #     - '${PORT:-3000}:${PORT:-3000}'
-      - '127.0.0.1:${PORT:-3000}:${PORT:-3000}'
+      - '127.0.0.1:${PORT:-8086}:${PORT:-80}'
 
     restart: unless-stopped
 
