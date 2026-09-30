@@ -49,12 +49,19 @@ export function isMenuButton(text: string): boolean {
   return MENU_LABELS.has(text);
 }
 
+/**
+ * Ordered by how often a student presses each button, not by category: the
+ * reserve action alone and full width on top, then the two week views, then
+ * the settings and the rare screens, with the destructive logout last and
+ * alone. Rows stay two wide at most so no label gets squeezed on a phone.
+ */
 export const mainMenu = (admin = false) => {
   const rows = [
-    [Markup.button.text(BTN.reserveFood), Markup.button.text(BTN.autoReserve)],
+    [Markup.button.text(BTN.reserveFood)],
     [Markup.button.text(BTN.thisWeekReserves), Markup.button.text(BTN.nextWeekReserves)],
-    [Markup.button.text(BTN.forgetCode), Markup.button.text(BTN.samadSite)],
-    [Markup.button.text(BTN.myInfo), Markup.button.text(BTN.about), Markup.button.text(BTN.support)],
+    [Markup.button.text(BTN.autoReserve), Markup.button.text(BTN.forgetCode)],
+    [Markup.button.text(BTN.myInfo), Markup.button.text(BTN.support)],
+    [Markup.button.text(BTN.about), Markup.button.text(BTN.samadSite)],
   ];
 
   if (admin) {
