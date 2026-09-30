@@ -1,4 +1,5 @@
 import { isFeatureKey, type FeatureKey } from '../domain/features';
+import type { ScheduleField } from '../scheduler/scheduler';
 import type { WeekSelection } from '../app/reservation.service';
 
 /**
@@ -36,9 +37,30 @@ export type CallbackAction =
   | { kind: 'admin-broadcast-send' }
   | { kind: 'admin-broadcast-cancel' }
   | { kind: 'admin-toggle-feature'; feature: FeatureKey }
+  | { kind: 'admin-schedule-list' }
+  | { kind: 'admin-schedule-edit'; job: string }
+  | { kind: 'admin-schedule-step'; job: string; field: ScheduleField; delta: number }
+  | { kind: 'admin-schedule-reset'; job: string }
   | { kind: 'admin-purge' };
 
 const WEEK_CODES: Record<WeekSelection, string> = { current: 'c', next: 'n' };
+
+const FIELD_CODES: Record<ScheduleField, string> = { hour: 'h', minute: 'm' };
+
+function parseField(code: string | undefined): ScheduleField | null {
+  if (code === 'h') {
+    return 'hour';
+  }
+  if (code === 'm') {
+    return 'minute';
+  }
+  return null;
+}
+
+/** A scheduled job's name, which is a short lowercase slug. */
+function parseJobName(value: string | undefined): string | null {
+  return value !== undefined && /^[a-z0-9-]{1,32}$/.test(value) ? value : null;
+}
 
 function parseWeek(code: string | undefined): WeekSelection | null {
   if (code === 'c') {
@@ -102,6 +124,14 @@ export function encodeCallback(action: CallbackAction): string {
       return 'x:b:n';
     case 'admin-toggle-feature':
       return `x:f:${action.feature}`;
+    case 'admin-schedule-list':
+      return 'x:s:l';
+    case 'admin-schedule-edit':
+      return `x:s:e:${action.job}`;
+    case 'admin-schedule-step':
+      return `x:s:${FIELD_CODES[action.field]}:${action.delta > 0 ? 'u' : 'd'}:${action.job}`;
+    case 'admin-schedule-reset':
+      return `x:s:r:${action.job}`;
     case 'admin-purge':
       return 'x:p:y';
   }
@@ -116,7 +146,7 @@ export function encodeCallback(action: CallbackAction): string {
  */
 export function decodeCallback(data: string): CallbackAction | null {
   const parts = data.split(':');
-  const [prefix, first, second, third] = parts;
+  const [prefix, first, second, third, fourth] = parts;
 
   switch (prefix) {
     case 'u': {
@@ -208,6 +238,31 @@ export function decodeCallback(data: string): CallbackAction | null {
       }
       if (first === 'f') {
         return second !== undefined && isFeatureKey(second) ? { kind: 'admin-toggle-feature', feature: second } : null;
+      }
+      if (first === 's') {
+        if (second === 'l') {
+          return { kind: 'admin-schedule-list' };
+        }
+
+        if (second === 'e') {
+          const job = parseJobName(third);
+          return job === null ? null : { kind: 'admin-schedule-edit', job };
+        }
+
+        if (second === 'r') {
+          const job = parseJobName(third);
+          return job === null ? null : { kind: 'admin-schedule-reset', job };
+        }
+
+        // A step carries four tokens: field, direction, then the job name.
+        const field = parseField(second);
+        const job = parseJobName(fourth);
+
+        if (field === null || job === null || (third !== 'u' && third !== 'd')) {
+          return null;
+        }
+
+        return { kind: 'admin-schedule-step', job, field, delta: third === 'u' ? 1 : -1 };
       }
       return null;
     }

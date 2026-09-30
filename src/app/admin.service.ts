@@ -4,7 +4,7 @@ import { rm } from 'node:fs/promises';
 import { config, isChatbotEnabled } from '../config/env';
 import type { User } from '../domain/models';
 import type { ChatbotRepository, ForgetCodeRepository, SessionStore, SupportMessenger, SystemProbe, UserRepository } from '../domain/ports';
-import type { ScheduledJobTiming, Scheduler } from '../scheduler/scheduler';
+import type { ScheduledJobTiming, ScheduleField, Scheduler } from '../scheduler/scheduler';
 import { addDays, startOfConfiguredDay } from '../shared/dates';
 import { ValidationError } from '../shared/errors';
 import { sanitizeTelegramHtml } from '../shared/sanitize';
@@ -123,6 +123,21 @@ export class AdminService {
   /** When each scheduled job fires next, in the bot's timezone. */
   schedule(): readonly ScheduledJobTiming[] {
     return this.scheduler.upcoming();
+  }
+
+  /**
+   * Moves one field of a job's time.
+   *
+   * Stored and applied by the scheduler in one step, so the panel cannot end up
+   * showing a time the timer does not use.
+   */
+  async stepScheduleTime(name: string, field: ScheduleField, delta: number): Promise<void> {
+    await this.scheduler.stepTime(name, field, delta);
+  }
+
+  /** Puts a job back on the time its configuration gives it. */
+  async resetScheduleTime(name: string): Promise<void> {
+    await this.scheduler.resetTime(name);
   }
 
   /** The most recently created users, newest first. */

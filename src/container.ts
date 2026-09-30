@@ -24,6 +24,7 @@ import { SqliteFeatureRepository } from './db/feature.repository';
 import { SqliteSystemProbe } from './db/maintenance';
 import { migrate } from './db/migrations';
 import { SqliteSupportRepository } from './db/support.repository';
+import { SqliteSettingsRepository } from './db/settings.repository';
 import { SqliteUserRepository } from './db/user.repository';
 import { HealthServer, type HealthReport } from './http/health';
 import { SamadHttpClient } from './samad/client';
@@ -85,6 +86,7 @@ export function createContainer(): Container {
   const supportTickets = new SqliteSupportRepository(db);
   const chatbotMessages = new SqliteChatbotRepository(db);
   const featureFlags = new SqliteFeatureRepository(db);
+  const settings = new SqliteSettingsRepository(db);
   const system = new SqliteSystemProbe(db, config.DATABASE_PATH);
 
   const sessions = new MemorySessionStore(clock);
@@ -129,8 +131,9 @@ export function createContainer(): Container {
   const chatbot = new ChatbotService(assistant, chatbotMessages, clock);
 
   // Built here rather than in the scheduled-work section below because the admin
-  // panel reports on it. The jobs themselves are registered at start-up.
-  const scheduler = new Scheduler();
+  // panel reports on it, and because it holds the time overrides an admin sets.
+  // The jobs themselves are registered at start-up.
+  const scheduler = new Scheduler(settings);
 
   const admin = new AdminService(
     users,
@@ -192,10 +195,13 @@ export function createContainer(): Container {
 
   // ── Scheduled work ────────────────────────────────────────────────────────
 
+  // The expressions here are defaults, not the last word: an admin can set the
+  // hour and minute of a job from the panel, and the stored time wins until it
+  // is dropped. See `Scheduler.start`.
   const jobs: ScheduledJob[] = [
     {
       name: 'auto-reserve',
-      expression: config.AUTO_RESERVE_CRON,
+      defaultExpression: config.AUTO_RESERVE_CRON,
       run: async () => {
         await autoReserve.runDaily();
       },
@@ -203,7 +209,7 @@ export function createContainer(): Container {
     {
       name: 'credit-watch',
       // The evening before the next window opens, so there is still time to pay.
-      expression: config.CREDIT_CHECK_CRON,
+      defaultExpression: config.CREDIT_CHECK_CRON,
       run: async () => {
         await creditWatch.runDaily();
       },
@@ -211,7 +217,7 @@ export function createContainer(): Container {
     {
       name: 'maintenance',
       // Every six hours: often enough to keep memory flat, rare enough to be free.
-      expression: '17 */6 * * *',
+      defaultExpression: '17 */6 * * *',
       run: async () => {
         await admin.runMaintenance();
       },
@@ -245,7 +251,7 @@ export function createContainer(): Container {
   const start = async (): Promise<void> => {
     await health.start();
     await bot.start();
-    scheduler.start(jobs);
+    await scheduler.start(jobs);
     await announceStartup();
 
     log.info({ env: config.NODE_ENV, port: config.PORT, chatbot: isChatbotEnabled, admins: config.ADMINS.length }, 'application started');

@@ -1,13 +1,22 @@
 import cron, { type ScheduledTask } from 'node-cron';
 import { config } from '../config/env';
+import type { SettingsRepository } from '../domain/ports';
 import { scopedLogger } from '../shared/logger';
 
 const log = scopedLogger('scheduler');
 
+/** Which half of a clock time an admin is nudging. */
+export type ScheduleField = 'hour' | 'minute';
+
+/** How many values the field cycles through, which is also its wrap-around. */
+const FIELD_SPAN: Record<ScheduleField, number> = { hour: 24, minute: 60 };
+
+const SETTINGS_PREFIX = 'schedule.';
+
 export interface ScheduledJob {
   name: string;
-  /** Five-field cron expression: minute hour day-of-month month day-of-week. */
-  expression: string;
+  /** Used whenever no admin override is stored for this job. */
+  defaultExpression: string;
   run: () => Promise<void>;
 }
 
@@ -16,6 +25,48 @@ export interface ScheduledJobTiming {
   expression: string;
   /** Null when the task is stopped, or has no match in node-cron's search window. */
   nextRunAt: Date | null;
+  /** The clock time the panel edits. Null when the expression is not a plain daily run. */
+  hour: number | null;
+  minute: number | null;
+  /** Whether the expression comes from a stored override rather than the default. */
+  isCustom: boolean;
+}
+
+/** `minute hour * * *` — the only shape an admin-set time can produce. */
+const DAILY_EXPRESSION = /^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/;
+
+/** The stored form of a clock time: two digits, a colon, two digits. */
+const CLOCK_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+export function parseClockTime(value: string): { hour: number; minute: number } | null {
+  const match = CLOCK_TIME.exec(value.trim());
+
+  return match === null ? null : { hour: Number(match[1]), minute: Number(match[2]) };
+}
+
+export const formatClockTime = (time: { hour: number; minute: number }): string =>
+  `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
+
+const toExpression = (time: { hour: number; minute: number }): string => `${time.minute} ${time.hour} * * *`;
+
+/**
+ * The clock time of a plain daily expression, or null for anything else.
+ *
+ * A job that runs on a step — every six hours, say — has no single hour an
+ * admin could nudge, so the panel shows it read-only instead of pretending it
+ * can be adjusted to a time it would not honour.
+ */
+export function parseDailyTime(expression: string): { hour: number; minute: number } | null {
+  const match = DAILY_EXPRESSION.exec(expression.trim());
+
+  if (match === null) {
+    return null;
+  }
+
+  const minute = Number(match[1]);
+  const hour = Number(match[2]);
+
+  return hour <= 23 && minute <= 59 ? { hour, minute } : null;
 }
 
 /**
@@ -29,31 +80,28 @@ export interface ScheduledJobTiming {
  *
  * The trade is stated plainly: running more than one replica would run the job
  * once per replica. The single-container deployment is what makes this correct.
+ *
+ * The scheduler also owns the stored time overrides. That is deliberate: it is
+ * the one place that decides what a job's expression is, so a time an admin
+ * saves and the timer that fires cannot drift apart.
  */
 export class Scheduler {
-  private readonly tasks: ScheduledTask[] = [];
+  private readonly jobs = new Map<string, { definition: ScheduledJob; expression: string; task: ScheduledTask }>();
 
-  private readonly registered: Array<{ name: string; expression: string; task: ScheduledTask }> = [];
+  constructor(private readonly settings: SettingsRepository) {}
 
-  start(jobs: readonly ScheduledJob[]): void {
+  /**
+   * Registers every job, preferring a stored override over the configured default.
+   *
+   * Reading the overrides here rather than in the composition root is what makes
+   * "restart and it is still the same time" true by construction: there is no
+   * second code path that could resolve an expression differently.
+   */
+  async start(jobs: readonly ScheduledJob[]): Promise<void> {
     for (const job of jobs) {
-      if (!cron.validate(job.expression)) {
-        // Failing at boot is better than a job that silently never fires.
-        throw new Error(`Invalid cron expression for job "${job.name}": ${job.expression}`);
-      }
+      const stored = await this.storedTime(job.name);
 
-      const task = cron.schedule(
-        job.expression,
-        () => {
-          void this.execute(job);
-        },
-        { timezone: config.TZ },
-      );
-
-      this.tasks.push(task);
-      this.registered.push({ name: job.name, expression: job.expression, task });
-
-      log.info({ job: job.name, expression: job.expression, timezone: config.TZ }, 'scheduled job registered');
+      this.register(job, stored === null ? job.defaultExpression : toExpression(stored));
     }
   }
 
@@ -64,22 +112,124 @@ export class Scheduler {
    * shows and what the timer does cannot drift apart.
    */
   upcoming(): readonly ScheduledJobTiming[] {
-    return this.registered.map(job => ({
-      name: job.name,
-      expression: job.expression,
-      nextRunAt: job.task.getNextRun(),
-    }));
+    return [...this.jobs.values()].map(entry => {
+      const time = parseDailyTime(entry.expression);
+
+      return {
+        name: entry.definition.name,
+        expression: entry.expression,
+        nextRunAt: entry.task.getNextRun(),
+        hour: time?.hour ?? null,
+        minute: time?.minute ?? null,
+        isCustom: entry.expression !== entry.definition.defaultExpression,
+      };
+    });
+  }
+
+  /**
+   * Moves one field of a job's time and applies it immediately.
+   *
+   * The value wraps rather than clamping, so every time is reachable by holding
+   * one direction and there is no edge to get stuck against. It is stored before
+   * the timer is touched: a value that is applied but not saved would vanish at
+   * the next restart, which is exactly the surprise this feature exists to
+   * remove.
+   */
+  async stepTime(name: string, field: ScheduleField, delta: number): Promise<void> {
+    const entry = this.jobOrThrow(name);
+    const current = this.editableTimeOf(entry.expression, name);
+
+    const span = FIELD_SPAN[field];
+    const next = { ...current, [field]: (((current[field] + delta) % span) + span) % span };
+
+    await this.settings.set(SETTINGS_PREFIX + name, formatClockTime(next));
+    this.applyExpression(name, toExpression(next));
+  }
+
+  /** Drops a stored override, putting the job back on its configured default. */
+  async resetTime(name: string): Promise<void> {
+    const entry = this.jobOrThrow(name);
+
+    await this.settings.remove(SETTINGS_PREFIX + name);
+
+    if (entry.expression !== entry.definition.defaultExpression) {
+      this.applyExpression(name, entry.definition.defaultExpression);
+    }
   }
 
   stop(): void {
-    for (const task of this.tasks) {
-      task.stop();
+    for (const entry of this.jobs.values()) {
+      entry.task.stop();
     }
 
-    this.tasks.length = 0;
-    this.registered.length = 0;
+    this.jobs.clear();
 
     log.info('scheduler stopped');
+  }
+
+  /** The stored override as a clock time, or null when there is none to read. */
+  private async storedTime(name: string): Promise<{ hour: number; minute: number } | null> {
+    const stored = await this.settings.get(SETTINGS_PREFIX + name);
+
+    return stored === null ? null : parseClockTime(stored);
+  }
+
+  private jobOrThrow(name: string): { definition: ScheduledJob; expression: string; task: ScheduledTask } {
+    const entry = this.jobs.get(name);
+
+    if (entry === undefined) {
+      // Only reachable if a caller names a job the container never registered.
+      throw new Error(`Unknown scheduled job: ${name}`);
+    }
+
+    return entry;
+  }
+
+  private editableTimeOf(expression: string, name: string): { hour: number; minute: number } {
+    const time = parseDailyTime(expression);
+
+    if (time === null) {
+      throw new Error(`Job "${name}" has no clock time to adjust`);
+    }
+
+    return time;
+  }
+
+  /** Swaps a job's live task for one on a new expression, without a gap. */
+  private applyExpression(name: string, expression: string): void {
+    const entry = this.jobOrThrow(name);
+
+    // Built before the old task is stopped, so an expression that failed to
+    // schedule could never leave the job with no task at all.
+    const task = this.createTask(entry.definition, expression);
+
+    entry.task.stop();
+    this.jobs.set(name, { definition: entry.definition, expression, task });
+
+    log.info({ job: name, expression }, 'scheduled job rescheduled');
+  }
+
+  private register(definition: ScheduledJob, expression: string): void {
+    const task = this.createTask(definition, expression);
+
+    this.jobs.set(definition.name, { definition, expression, task });
+
+    log.info({ job: definition.name, expression, timezone: config.TZ }, 'scheduled job registered');
+  }
+
+  private createTask(definition: ScheduledJob, expression: string): ScheduledTask {
+    if (!cron.validate(expression)) {
+      // Failing at boot is better than a job that silently never fires.
+      throw new Error(`Invalid cron expression for job "${definition.name}": ${expression}`);
+    }
+
+    return cron.schedule(
+      expression,
+      () => {
+        void this.execute(definition);
+      },
+      { timezone: config.TZ },
+    );
   }
 
   private async execute(job: ScheduledJob): Promise<void> {

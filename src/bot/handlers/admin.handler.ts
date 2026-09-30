@@ -1,9 +1,11 @@
 import type { Context, Telegraf } from 'telegraf';
+import type { ExtraReplyMessage } from 'telegraf/typings/telegram-types';
 import { config } from '../../config/env';
 import { copy } from '../../copy/fa';
 import type { FeatureKey } from '../../domain/features';
 import type { User } from '../../domain/models';
 import { findUniversityById } from '../../domain/universities';
+import type { ScheduleField, ScheduledJobTiming } from '../../scheduler/scheduler';
 import { startOfConfiguredDay } from '../../shared/dates';
 import { toAppError } from '../../shared/errors';
 import { scopedLogger } from '../../shared/logger';
@@ -15,9 +17,12 @@ import {
   adminSubMenu,
   adminUserPicker,
   broadcastConfirm,
+  clockLabel,
   featureToggles,
   logoutConfirm,
   purgeConfirm,
+  scheduleEditor,
+  schedulePicker,
   ticketList,
   userActions,
 } from '../keyboards';
@@ -454,14 +459,25 @@ async function onSystem(ctx: Context, services: BotServices): Promise<void> {
   await replyHtml(ctx, copy.admin.systemReport({ lines: systemLines(overview) }), adminSubMenu());
 }
 
-async function onSchedule(ctx: Context, services: BotServices): Promise<void> {
-  if ((await requireAdmin(ctx)) === null) {
-    return;
+/** A scheduled job whose hour and minute the panel can set. */
+type EditableJob = ScheduledJobTiming & { hour: number; minute: number };
+
+function editableJobOf(services: BotServices, name: string): EditableJob | null {
+  const job = services.admin.schedule().find(entry => entry.name === name);
+
+  if (job === undefined || job.hour === null || job.minute === null) {
+    return null;
   }
 
-  const now = services.clock.now();
+  return { ...job, hour: job.hour, minute: job.minute };
+}
 
-  const rows = services.admin.schedule().map(job =>
+/** The schedule report, plus the picker that leads to each job's stepper. */
+function scheduleScreen(services: BotServices): { text: string; extra: ExtraReplyMessage } {
+  const now = services.clock.now();
+  const jobs = services.admin.schedule();
+
+  const rows = jobs.map(job =>
     copy.admin.scheduleRow({
       name: copy.admin.scheduleJobName(job.name),
       expression: job.expression,
@@ -470,7 +486,133 @@ async function onSchedule(ctx: Context, services: BotServices): Promise<void> {
     }),
   );
 
-  await replyHtml(ctx, copy.admin.scheduleReport({ rows, updatedAt: formatJalaliDateTime(now), timezone: config.TZ }), adminSubMenu());
+  const editable = jobs.filter((job): job is EditableJob => job.hour !== null && job.minute !== null);
+
+  return {
+    text: copy.admin.scheduleReport({
+      rows,
+      updatedAt: formatJalaliDateTime(now),
+      timezone: config.TZ,
+      pickHint: editable.length === 0 ? null : copy.admin.schedulePickHint(),
+    }),
+    extra:
+      editable.length === 0
+        ? adminSubMenu()
+        : schedulePicker(
+            editable.map(job => ({
+              name: job.name,
+              label: copy.admin.schedulePickLabel(copy.admin.scheduleJobName(job.name), clockLabel(job.hour, job.minute)),
+            })),
+          ),
+  };
+}
+
+/**
+ * Re-draws the message a button was pressed on.
+ *
+ * Editing rather than sending is what keeps a stepper usable: holding an arrow
+ * would otherwise leave sixty messages behind. A failure is logged and dropped
+ * because the new value is already stored — not being able to re-draw the screen
+ * is a rendering problem, not a lost setting.
+ */
+async function editHtml(ctx: Context, html: string, extra: ExtraReplyMessage): Promise<void> {
+  try {
+    await ctx.editMessageText(html, { parse_mode: 'HTML', ...extra });
+  } catch (error) {
+    log.warn({ err: error, telegramId: ctx.from?.id }, 'could not re-render the schedule screen');
+  }
+}
+
+async function renderScheduleEditor(ctx: Context, services: BotServices, job: EditableJob): Promise<void> {
+  const now = services.clock.now();
+
+  await editHtml(
+    ctx,
+    copy.admin.scheduleEditor({
+      name: copy.admin.scheduleJobName(job.name),
+      nextRun: job.nextRunAt === null ? copy.admin.scheduleUnknown() : formatJalaliDateTime(job.nextRunAt),
+      countdown: job.nextRunAt === null ? null : copy.admin.countdown(job.nextRunAt.getTime() - now.getTime()),
+      custom: job.isCustom,
+    }),
+    scheduleEditor({ job: job.name, hour: job.hour, minute: job.minute, custom: job.isCustom }),
+  );
+}
+
+/**
+ * Runs an admin action against a job whose time is editable.
+ *
+ * The job is resolved from the live schedule rather than trusted from the
+ * button: an inline keyboard from an earlier deployment is still tappable, and a
+ * job that runs on a step has no clock time to nudge.
+ */
+async function withEditableJob(
+  ctx: Context,
+  services: BotServices,
+  jobName: string,
+  action: (() => Promise<void>) | null,
+): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  if (editableJobOf(services, jobName) === null) {
+    await replyHtml(ctx, copy.admin.scheduleNotEditable(), adminSubMenu());
+    return;
+  }
+
+  if (action !== null) {
+    await action();
+  }
+
+  // Read again after the action: the screen exists to show the time it now has.
+  const updated = editableJobOf(services, jobName);
+
+  if (updated !== null) {
+    await renderScheduleEditor(ctx, services, updated);
+  }
+}
+
+async function onSchedule(ctx: Context, services: BotServices): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const { text, extra } = scheduleScreen(services);
+
+  await replyHtml(ctx, text, extra);
+}
+
+/** The same report, re-drawn on the message the «برگشت» button was pressed on. */
+async function onScheduleList(ctx: Context, services: BotServices): Promise<void> {
+  if ((await requireAdmin(ctx)) === null) {
+    return;
+  }
+
+  const { text, extra } = scheduleScreen(services);
+
+  await editHtml(ctx, text, extra);
+}
+
+async function onScheduleEdit(ctx: Context, services: BotServices, jobName: string): Promise<void> {
+  await withEditableJob(ctx, services, jobName, null);
+}
+
+async function onScheduleStep(
+  ctx: Context,
+  services: BotServices,
+  jobName: string,
+  field: ScheduleField,
+  delta: number,
+): Promise<void> {
+  await withEditableJob(ctx, services, jobName, async () => {
+    await services.admin.stepScheduleTime(jobName, field, delta);
+  });
+}
+
+async function onScheduleReset(ctx: Context, services: BotServices, jobName: string): Promise<void> {
+  await withEditableJob(ctx, services, jobName, async () => {
+    await services.admin.resetScheduleTime(jobName);
+  });
 }
 
 async function onMaintenance(ctx: Context): Promise<void> {
@@ -575,4 +717,16 @@ export function registerAdminHandlers(bot: Telegraf, services: BotServices): voi
   );
 }
 
-export { onShowUser, onLogoutPrompt, onLogoutConfirm, onCloseTicket, onBroadcastSend, onBroadcastCancel, onPurge };
+export {
+  onShowUser,
+  onLogoutPrompt,
+  onLogoutConfirm,
+  onCloseTicket,
+  onBroadcastSend,
+  onBroadcastCancel,
+  onPurge,
+  onScheduleList,
+  onScheduleEdit,
+  onScheduleStep,
+  onScheduleReset,
+};

@@ -475,10 +475,11 @@ export const copy = {
 
     systemReport: (input: { lines: readonly string[] }): string => blocks(t('admin.systemTitle'), bullet(input.lines)),
 
-    scheduleReport: (input: { rows: readonly string[]; updatedAt: string; timezone: string }): string =>
+    scheduleReport: (input: { rows: readonly string[]; updatedAt: string; timezone: string; pickHint: string | null }): string =>
       blocks(
         t('admin.scheduleTitle'),
         input.rows.length === 0 ? t('admin.scheduleEmpty') : input.rows.join('\n\n'),
+        input.pickHint,
         t('admin.scheduleHint', { tz: input.timezone }),
         t('admin.scheduleUpdatedAt', { updatedAt: input.updatedAt }),
       ),
@@ -494,6 +495,29 @@ export const copy = {
     scheduleJobName: (name: string): string => (hasText(`admin.scheduleJobs.${name}`) ? t(`admin.scheduleJobs.${name}`) : name),
 
     scheduleUnknown: (): string => t('admin.scheduleUnknown'),
+
+    schedulePickHint: (): string => t('admin.schedulePickHint'),
+
+    schedulePickLabel: (name: string, time: string): string => t('admin.schedulePickLabel', { name, time }),
+
+    scheduleNotEditable: (): string => t('admin.scheduleNotEditable'),
+
+    /**
+     * The stepper screen. The countdown leads, because "how long until this
+     * runs?" is the question the whole screen is there to answer.
+     */
+    scheduleEditor: (input: { name: string; nextRun: string; countdown: string | null; custom: boolean }): string =>
+      blocks(
+        t('admin.scheduleEditTitle', { name: input.name }),
+        bullet(
+          [
+            input.countdown === null ? null : t('admin.scheduleEditCountdownLine', { countdown: input.countdown }),
+            t('admin.scheduleEditNextLine', { next: input.nextRun }),
+          ].filter((line): line is string => line !== null),
+        ),
+        t('admin.scheduleEditBody'),
+        input.custom ? t('admin.scheduleEditCustomNote') : t('admin.scheduleEditDefaultNote'),
+      ),
 
     /**
      * A countdown as a person reads it: days and hours only when they matter,

@@ -1,9 +1,10 @@
 import { Markup } from 'telegraf';
 import type { FeatureKey } from '../domain/features';
 import type { MealOption, ReservedMeal, Self } from '../domain/models';
-import { WEEKDAY_NAMES } from '../shared/persian';
+import { WEEKDAY_NAMES, toPersianDigits } from '../shared/persian';
 import { copy, buttonLabel, raw, selfButton, t } from '../copy/fa';
 import { encodeCallback } from './callback-data';
+import type { ScheduleField } from '../scheduler/scheduler';
 import type { WeekSelection } from '../app/reservation.service';
 
 export const BTN = {
@@ -226,3 +227,48 @@ export const featureToggles = (features: readonly { key: FeatureKey; name: strin
       ),
     ]),
   );
+
+/** One button per job whose time the panel can set. */
+export const schedulePicker = (jobs: readonly { name: string; label: string }[]) =>
+  Markup.inlineKeyboard(
+    jobs.map(job => [Markup.button.callback(buttonLabel(job.label), encodeCallback({ kind: 'admin-schedule-edit', job: job.name }))]),
+  );
+
+const clockPart = (value: number): string => toPersianDigits(String(value).padStart(2, '0'));
+
+/** A clock time as a person reads it, e.g. `۰۷:۰۰`. */
+export const clockLabel = (hour: number, minute: number): string => `${clockPart(hour)}:${clockPart(minute)}`;
+
+/**
+ * The time stepper: two columns, each with up over the value over down.
+ *
+ * The value cells are buttons because Telegram has no other way to put text in
+ * an inline row; tapping one re-draws the screen, which refreshes the countdown
+ * above it. «پیش‌فرض» appears only once an override is stored, since before that
+ * there is nothing to drop.
+ */
+export const scheduleEditor = (input: { job: string; hour: number; minute: number; custom: boolean }) => {
+  const edit = encodeCallback({ kind: 'admin-schedule-edit', job: input.job });
+  const step = (field: ScheduleField, delta: number) => encodeCallback({ kind: 'admin-schedule-step', job: input.job, field, delta });
+
+  const controls = [Markup.button.callback(t('buttons.scheduleBack'), encodeCallback({ kind: 'admin-schedule-list' }))];
+
+  if (input.custom) {
+    controls.unshift(
+      Markup.button.callback(t('buttons.scheduleReset'), encodeCallback({ kind: 'admin-schedule-reset', job: input.job })),
+    );
+  }
+
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback(t('buttons.scheduleUp'), step('hour', 1)),
+      Markup.button.callback(t('buttons.scheduleUp'), step('minute', 1)),
+    ],
+    [Markup.button.callback(clockPart(input.hour), edit), Markup.button.callback(clockPart(input.minute), edit)],
+    [
+      Markup.button.callback(t('buttons.scheduleDown'), step('hour', -1)),
+      Markup.button.callback(t('buttons.scheduleDown'), step('minute', -1)),
+    ],
+    controls,
+  ]);
+};

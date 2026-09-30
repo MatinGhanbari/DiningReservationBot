@@ -10,6 +10,10 @@ import {
   onLogoutConfirm,
   onLogoutPrompt,
   onPurge,
+  onScheduleEdit,
+  onScheduleList,
+  onScheduleReset,
+  onScheduleStep,
   onShowUser,
   onToggleFeature,
   registerAdminHandlers,
@@ -222,6 +226,18 @@ export class TelegramBot {
         return;
       case 'admin-toggle-feature':
         await onToggleFeature(ctx, services, action.feature);
+        return;
+      case 'admin-schedule-list':
+        await onScheduleList(ctx, services);
+        return;
+      case 'admin-schedule-edit':
+        await onScheduleEdit(ctx, services, action.job);
+        return;
+      case 'admin-schedule-step':
+        await onScheduleStep(ctx, services, action.job, action.field, action.delta);
+        return;
+      case 'admin-schedule-reset':
+        await onScheduleReset(ctx, services, action.job);
         return;
       case 'admin-purge':
         await onPurge(ctx, services);

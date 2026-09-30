@@ -272,6 +272,20 @@ export interface FeatureRepository {
   set(key: FeatureKey, enabled: boolean): Promise<void>;
 }
 
+/**
+ * Operator settings that outlive the process.
+ *
+ * A missing key means "never set", and every reader turns that into its own
+ * default — which is what makes the stored value an override rather than the
+ * source of truth, and what keeps a deployment that has never been touched
+ * governed entirely by its configuration.
+ */
+export interface SettingsRepository {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
+  remove(key: string): Promise<void>;
+}
+
 export interface DatabaseSize {
   databaseBytes: number;
   walBytes: number;

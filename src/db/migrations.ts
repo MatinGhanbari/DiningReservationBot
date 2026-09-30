@@ -167,6 +167,23 @@ const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 4,
+    name: 'app-settings',
+    up: db => {
+      db.exec(`
+        -- Values an operator changes from the admin panel and that must outlive
+        -- the process. A single key/value table rather than a column per setting:
+        -- what these have in common is not their type, it is that the absence of
+        -- a row means "never set", which every reader turns into its default.
+        CREATE TABLE app_settings (
+          key        TEXT    PRIMARY KEY,
+          value      TEXT    NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+      `);
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);

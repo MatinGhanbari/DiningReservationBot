@@ -238,6 +238,15 @@
         "credit-watch": "💳 بررسی موجودی",
         "maintenance": "🧹 نگهداری"
       },
+      "schedulePickHint": "برای تنظیم ساعت هر کار، روی اسمش بزن.",
+      "schedulePickLabel": "{name} · {time}",
+      "scheduleNotEditable": "زمان این کار از پنل تنظیم نمی‌شه؛ چون به‌جای یک ساعت مشخص، دوره‌ای اجرا می‌شه.",
+      "scheduleEditTitle": "⏰ <b>تنظیم زمان: {name}</b>",
+      "scheduleEditNextLine": "اجرای بعدی: <b>{next}</b>",
+      "scheduleEditCountdownLine": "⏳ <b>{countdown}</b> دیگه",
+      "scheduleEditCustomNote": "✍️ این زمان دستی تنظیم شده و بعد از راه‌اندازی مجدد هم همینه.",
+      "scheduleEditDefaultNote": "این زمان از تنظیمات پیش‌فرض میاد؛ با اولین تغییر، نسخهٔ خودت ذخیره می‌شه.",
+      "scheduleEditBody": "با دکمه‌های بالا و پایین، ساعت و دقیقه رو تنظیم کن. هر تغییر همون لحظه ذخیره می‌شه و از اجرای بعدی به بعد هم همینه.",
       "maintenanceTitle": "🧹 <b>نگهداری</b>",
       "maintenanceIntroBody": "کارهای زیر بی‌خطرن و فقط داده‌های بی‌مصرف رو پاک می‌کنن. از منوی پایین انتخاب کن.",
       "purgeDoneTitle": "🧹 <b>پاک‌سازی انجام شد.</b>",
@@ -349,6 +358,10 @@
       "broadcastSend": "📣 آره، بفرست",
       "broadcastCancel": "‹ نه، بی‌خیال",
       "purgeConfirm": "🧹 پاک‌سازی کن",
+      "scheduleUp": "⬆️",
+      "scheduleDown": "⬇️",
+      "scheduleReset": "♻️ پیش‌فرض",
+      "scheduleBack": "‹ برگشت",
       "ticketCloseTemplate": "🔒 #{ticketId} · {displayName}"
     }
   }
