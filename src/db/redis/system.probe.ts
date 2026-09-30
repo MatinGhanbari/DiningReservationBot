@@ -7,8 +7,14 @@ import { LATEST_SCHEMA_VERSION, scanKeys, type RedisStore } from './store';
  * The only shape a snapshot path may take: letters, digits, and the separators
  * and suffix we generate ourselves. A path outside this is refused rather than
  * quoted into something harmless-looking.
+ *
+ * `:` is in the set for one reason: the caller builds the path with
+ * `join(tmpdir(), …)`, and on Windows that is `C:\Users\…\Temp\…`. Without it
+ * every backup on a Windows machine was refused — the allowlist was written for
+ * POSIX paths, and Linux (`/tmp/…`) never showed the gap. A colon cannot escape
+ * a directory on either platform, and `..` is still rejected separately below.
  */
-const SAFE_PATH_PATTERN = /^[A-Za-z0-9._\-/\\ ]+\.json$/;
+const SAFE_PATH_PATTERN = /^[A-Za-z0-9._\-/\\: ]+\.json$/;
 
 /** How many keys one `DUMP` pass covers before giving the connection back. */
 const DUMP_BATCH = 500;
