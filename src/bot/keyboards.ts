@@ -58,9 +58,10 @@ export function isMenuButton(text: string): boolean {
 export const mainMenu = (admin = false) => {
   const rows = [
     [Markup.button.text(BTN.reserveFood)],
+    [Markup.button.text(BTN.autoReserve)],
     [Markup.button.text(BTN.thisWeekReserves), Markup.button.text(BTN.nextWeekReserves)],
-    [Markup.button.text(BTN.autoReserve), Markup.button.text(BTN.forgetCode)],
-    [Markup.button.text(BTN.myInfo), Markup.button.text(BTN.support)],
+    [Markup.button.text(BTN.myInfo)],
+    [Markup.button.text(BTN.forgetCode), Markup.button.text(BTN.support)],
     [Markup.button.text(BTN.about), Markup.button.text(BTN.samadSite)],
   ];
 
