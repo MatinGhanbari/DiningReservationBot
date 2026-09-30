@@ -29,6 +29,7 @@ import { createTextWizard, handleUniversitySelection, registerStartHandlers } fr
 import { createAdminReplyInterceptor, registerSupportHandlers } from './handlers/support.handler';
 import { handler, replyHtml } from './reply';
 import type { BotServices } from './services';
+import { logApiCalls, logUpdate } from './telemetry';
 
 const log = scopedLogger('bot');
 
@@ -37,6 +38,7 @@ const log = scopedLogger('bot');
  *
  * Middleware order is the whole design here, and it is load-bearing:
  *
+ *   0. Telemetry — every update is logged before anything can claim it.
  *   1. Commands — `/start` and friends always win.
  *   2. Admin replies — an admin answering a support message is routed to the user
  *      before any other listener can mistake it for something else.
@@ -73,6 +75,11 @@ export class TelegramBot {
     private readonly services: BotServices,
   ) {
     this.bot = bot;
+
+    // Every outgoing call goes through `callApi`, so the transport is traced in
+    // one place rather than at each of the thirty-odd send sites.
+    logApiCalls(bot.telegram);
+
     this.webhook =
       webhookPath === null
         ? null
@@ -87,6 +94,9 @@ export class TelegramBot {
 
   private registerMiddleware(): void {
     const { bot, services } = this;
+
+    // 0 — telemetry, so an update is on the record before a handler sees it.
+    bot.use(logUpdate);
 
     // 1 — commands, plus the reply-keyboard handlers that share their behaviour.
     registerStartHandlers(bot, services);

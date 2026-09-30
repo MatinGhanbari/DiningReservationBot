@@ -50,6 +50,12 @@ const redactPaths = [
   'BOT_TOKEN',
   'ENCRYPTION_KEY',
   'OPENROUTER_API_KEY',
+  // Telegram's webhook secret travels in the `setWebhook` payload, and a failed
+  // call reaches the log inside the thrown error — `err.on.payload.secret_token`
+  // — rather than at the top level, so the nested path is named explicitly.
+  'secret_token',
+  '*.secret_token',
+  'err.on.payload.secret_token',
 ];
 
 export const logger: Logger = pino({
