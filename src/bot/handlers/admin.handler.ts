@@ -5,6 +5,7 @@ import type { FeatureKey } from '../../domain/features';
 import type { User } from '../../domain/models';
 import { findUniversityById } from '../../domain/universities';
 import { startOfConfiguredDay } from '../../shared/dates';
+import { toAppError } from '../../shared/errors';
 import { scopedLogger } from '../../shared/logger';
 import { formatJalaliDateTime, formatNumber, toPersianDigits, weekdayByIndex } from '../../shared/persian';
 import { requireAdmin } from '../guards';
@@ -408,12 +409,28 @@ async function onBroadcastSend(ctx: Context, services: BotServices): Promise<voi
   await services.conversations.clear(adminId);
   await tryReplyHtml(ctx, copy.admin.broadcastRunning());
 
-  // A broadcast is paced deliberately to stay under Telegram's rate limit, so
-  // the admin can be waiting for minutes. The indicator is the only sign the
-  // run is still alive.
-  const result = await withTyping(ctx, () => services.admin.broadcast(state.text));
+  // The run is deliberately not awaited, and that is the whole point of this
+  // shape. A broadcast is one API call per recipient plus the pacing sleep, so
+  // it takes minutes by design — far past Telegraf's 90-second handler timeout,
+  // which kills the update rather than waiting. Awaiting it here told the admin
+  // the send had failed while it was still going, and told them it had
+  // finished minutes later; both messages were wrong, and the first one was
+  // wrong about the whole run. Detached, the update is short and the run
+  // reports itself when it is actually done.
+  //
+  // The typing indicator goes with it: `withTyping` wraps the run, not the
+  // reply, and it is the only sign in that chat that the run is still alive.
+  void withTyping(ctx, () => services.admin.broadcast(state.text))
+    .then(result => tryReplyHtml(ctx, copy.admin.broadcastDone(result), adminSubMenu()))
+    .catch(async error => {
+      // Same contract as the `handler()` wrapper this no longer runs inside:
+      // an expected failure keeps its own Persian message.
+      const appError = toAppError(error);
 
-  await replyHtml(ctx, copy.admin.broadcastDone(result), adminSubMenu());
+      log.error({ err: error, telegramId: adminId, code: appError.code }, 'broadcast failed');
+
+      await tryReplyHtml(ctx, appError.userMessage, adminSubMenu());
+    });
 }
 
 async function onBroadcastCancel(ctx: Context, services: BotServices): Promise<void> {
