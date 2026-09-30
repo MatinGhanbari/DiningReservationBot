@@ -123,7 +123,21 @@ export class TelegramBot {
    */
   private registerErrorHandler(): void {
     this.bot.catch(async (error, ctx) => {
-      log.error({ err: error, telegramId: ctx.from?.id }, 'unhandled bot error');
+      // The update's identity is logged because this handler is reached for
+      // Telegraf's own 90-second handler timeout, and that error is raised from
+      // outside the middleware chain: the `handler()` wrapper's own log — the
+      // one that names the handler — never runs for it, so without these fields
+      // a timed-out update cannot be told apart from any other update.
+      log.error(
+        {
+          err: error,
+          telegramId: ctx.from?.id,
+          updateId: ctx.update.update_id,
+          updateType: ctx.updateType,
+          chatId: ctx.chat?.id,
+        },
+        'unhandled bot error',
+      );
 
       try {
         await replyHtml(ctx, copy.errors.generic());
