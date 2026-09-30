@@ -522,8 +522,27 @@ async function editHtml(ctx: Context, html: string, extra: ExtraEditMessageText)
   try {
     await ctx.editMessageText(html, { parse_mode: 'HTML', ...extra });
   } catch (error) {
+    // Telegram answers 400 «message is not modified» when the screen being drawn
+    // is already the one on display — re-opening the same editor, or a tap whose
+    // effect cancelled out. What the user is looking at is already correct, so
+    // this is not a rendering problem and does not deserve a warning.
+    if (isMessageNotModified(error)) {
+      return;
+    }
+
     log.warn({ err: error, telegramId: ctx.from?.id }, 'could not re-render the schedule screen');
   }
+}
+
+/**
+ * Whether a failure is Telegram's benign "you asked me to replace a message with
+ * itself".
+ *
+ * Matched on the description rather than on `code === 400` alone: a 400 is also
+ * how Telegram reports genuinely bad markup, which must keep warning.
+ */
+function isMessageNotModified(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('message is not modified');
 }
 
 async function renderScheduleEditor(ctx: Context, services: BotServices, job: EditableJob): Promise<void> {

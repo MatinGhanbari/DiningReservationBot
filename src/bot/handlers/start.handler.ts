@@ -245,13 +245,15 @@ async function advance(
         services.auth.login(telegramId, credentials.universityId, credentials.samadUsername, credentials.password),
       );
 
-      // Best effort: clearing the message that held the password keeps it out of
-      // the chat history on both sides.
-      try {
-        await ctx.deleteMessage();
-      } catch {
+      // Best effort, and deliberately not awaited: clearing the message that held
+      // the password keeps it out of the chat history, but it must never hold the
+      // welcome screen behind it. On a slow API root this call took 19 s and the
+      // user watched a dead chat for the whole of it — a courtesy call is not
+      // worth a second of that. `ctx.deleteMessage()` targets the update's own
+      // message, so running it after the reply deletes the same message either way.
+      void ctx.deleteMessage().catch(() => {
         // Deleting is a courtesy, not a requirement.
-      }
+      });
 
       await services.conversations.clear(telegramId);
       await replyHtml(ctx, copy.start.welcome(user.firstName, isNewUser), mainMenu(isAdmin(telegramId)));
