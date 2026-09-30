@@ -264,10 +264,17 @@ export class TelegramBot {
       return;
     }
 
-    await this.bot.telegram.setWebhook(webhookUrl, {
-      drop_pending_updates: true,
-      ...(config.TELEGRAM_WEBHOOK_SECRET.length === 0 ? {} : { secret_token: config.TELEGRAM_WEBHOOK_SECRET }),
-    });
+    // Fetched here rather than left to the first delivery. Telegraf fetches the
+    // bot's own identity lazily inside `handleUpdate`, and by then the update has
+    // been acknowledged — a failure there would lose it silently, because the
+    // platform is never told to retry. Doing it at boot also means a token the
+    // API rejects stops the process instead of the first message.
+    this.bot.botInfo = await this.bot.telegram.getMe();
+
+    // await this.bot.telegram.setWebhook(webhookUrl, {
+    //   drop_pending_updates: true,
+    //   ...(config.TELEGRAM_WEBHOOK_SECRET.length === 0 ? {} : { secret_token: config.TELEGRAM_WEBHOOK_SECRET }),
+    // });
 
     log.info({ url: webhookUrl, path: webhook.path }, 'bot is receiving updates over the webhook');
   }
