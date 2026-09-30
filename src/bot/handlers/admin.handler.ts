@@ -515,7 +515,7 @@ function scheduleScreen(services: BotServices): { text: string; extra: ExtraRepl
  * because the new value is already stored — not being able to re-draw the screen
  * is a rendering problem, not a lost setting.
  */
-async function editHtml(ctx: Context, html: string, extra: ExtraReplyMessage): Promise<void> {
+async function editHtml(ctx: Context, html: string, extra: ExtraEditMessageText): Promise<void> {
   try {
     await ctx.editMessageText(html, { parse_mode: 'HTML', ...extra });
   } catch (error) {
