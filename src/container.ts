@@ -33,6 +33,7 @@ import { scopedLogger } from './shared/logger';
 import { formatJalaliDateTime } from './shared/persian';
 import { SECOND } from './shared/time';
 import { OpenRouterAssistant } from './support/openrouter.client';
+import https from 'node:https';
 
 const log = scopedLogger('container');
 
@@ -120,7 +121,11 @@ export function createContainer(): Container {
 
   // ── Presentation ──────────────────────────────────────────────────────────
 
-  const telegram = new Telegraf(config.BOT_TOKEN, { telegram: { apiRoot: config.TELEGRAM_API_ROOT } });
+  const noKeepAliveAgent = new https.Agent({
+    keepAlive: false,
+  });
+
+  const telegram = new Telegraf(config.BOT_TOKEN, { telegram: { apiRoot: config.TELEGRAM_API_ROOT, agent: noKeepAliveAgent } });
   const notifier = new TelegramNotifier(telegram, config.ADMINS);
 
   const autoReserve = new AutoReserveService(users, reservations, notifier, clock);
