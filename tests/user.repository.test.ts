@@ -36,14 +36,14 @@ describe('RedisUserRepository', () => {
     await users.toggleAutoReserveWeekday(555, 2);
 
     // Re-login updates the credentials and must not wipe configuration.
-    await users.save(makeUser({ encryptedPassword: 'v1:new:tag:cipher', firstName: 'مهدی' }));
+    await users.save(makeUser({ encryptedRefreshToken: 'v1:new:tag:cipher', firstName: 'مهدی' }));
 
     const found = await users.findByTelegramId(555);
 
     expect(found?.autoReserveEnabled).toBe(true);
     expect(found?.autoReserveSelfId).toBe(5);
     expect(found?.autoReserveWeekdays).toEqual([2]);
-    expect(found?.encryptedPassword).toBe('v1:new:tag:cipher');
+    expect(found?.encryptedRefreshToken).toBe('v1:new:tag:cipher');
   });
 
   it('refuses to link one Samad account to a second Telegram account', async () => {

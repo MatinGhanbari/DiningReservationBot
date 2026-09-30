@@ -45,7 +45,7 @@ what it costs, is in [ADR 0009](docs/adr/0009-redis-for-all-storage.md).
 
 | Feature | Description |
 | --- | --- |
-| Sign in | Samad username and password; the password is stored encrypted with AES-256-GCM |
+| Sign in | Samad username and password, used once; the session is renewed with a stored refresh token |
 | Browse the menu | Reservable meals, grouped by dining hall and by week |
 | Reserve a meal | Confirmed booking, with the exact result reported back from Samad |
 | Auto-reserve | Books the chosen weekdays ahead of capacity filling up |
@@ -78,7 +78,7 @@ src/
 │
 ├── db/redis/        Redis keyspace and the repositories
 ├── cache/           in-memory cache (sessions, conversation state)
-├── crypto/          password encryption
+├── crypto/          encryption of the stored refresh token
 ├── config/          configuration
 │   ├── env.ts           environment variables, validated with zod
 │   └── appsettings.json every Samad host, route and header
@@ -157,7 +157,7 @@ matter most:
 | --- | --- | --- |
 | `BOT_TOKEN` | — | **Required.** Bot token from @BotFather |
 | `ADMINS` | — | **Required.** JSON array of numeric admin ids |
-| `ENCRYPTION_KEY` | — | **Required.** At least 64 characters; encrypts user passwords |
+| `ENCRYPTION_KEY` | — | **Required.** At least 64 characters; encrypts the stored refresh tokens |
 | `SAMAD_BASIC_AUTH` | empty | Samad client credential, `Basic <base64>`. Empty makes the Samad login fail with `401` |
 | `REDIS_URL` | `redis://127.0.0.1:6379` | The Redis holding all of the data |
 | `REDIS_KEY_PREFIX` | `drb:` | Namespace for every key, if the Redis is shared |
@@ -177,7 +177,7 @@ matter most:
 | `SAMAD_MAX_RETRIES` | `2` | Retries on a transient error |
 | `SAMAD_TLS_VERIFY` | `true` | Verify Samad's TLS certificate chain |
 
-> **Warning:** changing `ENCRYPTION_KEY` makes previously stored passwords
+> **Warning:** changing `ENCRYPTION_KEY` makes the stored refresh tokens
 > unreadable, and every user has to sign in again.
 
 ### Samad settings: `appsettings.json`
@@ -433,10 +433,13 @@ health server and button payload encoding.
 
 ## Security
 
-- **Passwords** are encrypted with AES-256-GCM under a key derived with `scrypt`,
-  with a random initialisation vector per record. The stored format is versioned
-  so the algorithm can be migrated later. See
-  [ADR 0006](docs/adr/0006-aes-gcm-for-stored-passwords.md).
+- **Passwords are never stored.** Signing in uses the password once, and what is
+  kept afterwards is the refresh token Samad issues in return — encrypted with
+  AES-256-GCM under a key derived with `scrypt`, with a random initialisation
+  vector per record, in a versioned format. The refresh token can be revoked and
+  expires; a password could not be. See
+  [ADR 0010](docs/adr/0010-refresh-tokens-instead-of-stored-passwords.md) and
+  [ADR 0006](docs/adr/0006-aes-gcm-for-stored-passwords.md) for the cipher.
 - **Secrets** are read from the environment only. `appsettings.json` is tracked
   by git and therefore holds no credential — a value committed once stays
   readable in the history even after it is deleted from the file.
@@ -467,6 +470,7 @@ The significant decisions and the reasoning behind each are recorded in
 | [0005](docs/adr/0005-single-container-deployment.md) | Single-container deployment |
 | [0006](docs/adr/0006-aes-gcm-for-stored-passwords.md) | AES-256-GCM for stored passwords |
 | [0007](docs/adr/0007-centralized-persian-copy.md) | Centralised Persian copy in one file |
+| [0010](docs/adr/0010-refresh-tokens-instead-of-stored-passwords.md) | Refresh tokens instead of stored passwords |
 
 ---
 

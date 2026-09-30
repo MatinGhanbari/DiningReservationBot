@@ -16,13 +16,17 @@ export interface User {
   universityId: number;
   samadUsername: string;
   /**
-   * Password encrypted with an authenticated cipher.
+   * The Samad refresh token, encrypted with an authenticated cipher.
    *
-   * It has to be recoverable, not hashed: the bot replays it to Samad whenever
-   * the access token expires. The bot's own copy is what makes re-login invisible
-   * to the user, and the trade-off is documented in the README.
+   * The password is used once, at sign-in, and never kept; this is what renews
+   * the session afterwards. It has to be recoverable rather than hashed for the
+   * same reason the password used to be — it is sent back to Samad — and the
+   * trade-off is documented in ADR 0010.
+   *
+   * Empty when Samad's token endpoint issued no refresh token, which leaves the
+   * user to sign in again once the access token expires.
    */
-  encryptedPassword: string;
+  encryptedRefreshToken: string;
   autoReserveEnabled: boolean;
   /**
    * Which dining hall auto-reserve books at.
@@ -146,6 +150,11 @@ export interface ReservationOutcome {
 /** Samad's answer to a login attempt. */
 export interface SamadSession {
   accessToken: string;
+  /**
+   * What renews this session once `accessToken` expires, or null when Samad
+   * issued none. Never logged, and stored encrypted at rest.
+   */
+  refreshToken: string | null;
   expiresAt: Date;
   firstName: string;
   lastName: string | null;

@@ -9,7 +9,7 @@ Redis did two things in the previous version: it held each user's Samad access
 token, and it held conversation state in the middle of the sign-in wizard.
 
 Both pieces of data are entirely transient. The token is rebuilt on the next
-sign-in (the password is stored), and if conversation state is lost the user only
+sign-in (the refresh token is stored), and if conversation state is lost the user only
 has to tap the button again.
 
 The more serious problem was that the previous version ran under PM2 across **two

@@ -21,8 +21,8 @@ import {
 const KEY = 'a-test-key-that-is-definitely-long-enough-for-the-required-minimum-length';
 
 /** The shared factory stores a placeholder cipher; these tests need a real one. */
-const withPassword = (overrides: Partial<User> = {}): User =>
-  makeUser({ encryptedPassword: new AesSecretBox(KEY).encrypt('my-password'), ...overrides });
+const withRefreshToken = (overrides: Partial<User> = {}): User =>
+  makeUser({ encryptedRefreshToken: new AesSecretBox(KEY).encrypt('refresh-token-1'), ...overrides });
 
 /** 2026-09-20 is a Sunday; in Tehran that is 2026-09-20 as well. */
 const NOW = '2026-09-20T06:00:00Z';
@@ -59,7 +59,7 @@ describe('ForgetCodeService', () => {
   describe('share', () => {
     it('prints a code and adds it to the pool', async () => {
       const { forgetCodes, gateway } = build();
-      await users.save(withPassword());
+      await users.save(withRefreshToken());
       gateway.listReserves.mockResolvedValue({ meals: [reservedMeal()], remainingCreditRial: 0, weekStart: new Date() });
 
       const outcome = await forgetCodes.share(555, 101);
@@ -70,7 +70,7 @@ describe('ForgetCodeService', () => {
 
     it('reports a duplicate instead of failing', async () => {
       const { forgetCodes, gateway } = build();
-      await users.save(withPassword());
+      await users.save(withRefreshToken());
       gateway.listReserves.mockResolvedValue({ meals: [reservedMeal()], remainingCreditRial: 0, weekStart: new Date() });
 
       await forgetCodes.share(555, 101);
@@ -85,7 +85,7 @@ describe('ForgetCodeService', () => {
 
     it('refuses a meal that has no transfers left', async () => {
       const { forgetCodes, gateway } = build({ issuedForgetCode: { remainingCount: 0 } });
-      await users.save(withPassword());
+      await users.save(withRefreshToken());
       gateway.listReserves.mockResolvedValue({ meals: [reservedMeal()], remainingCreditRial: 0, weekStart: new Date() });
 
       await expect(forgetCodes.share(555, 101)).rejects.toBeInstanceOf(UpstreamRejectedError);
@@ -93,7 +93,7 @@ describe('ForgetCodeService', () => {
 
     it("asks the user's own university for the code", async () => {
       const { forgetCodes, gateway } = build();
-      await users.save(withPassword({ universityId: 3 }));
+      await users.save(withRefreshToken({ universityId: 3 }));
       gateway.listReserves.mockResolvedValue({ meals: [reservedMeal()], remainingCreditRial: 0, weekStart: new Date() });
 
       await forgetCodes.share(555, 101);
@@ -127,7 +127,7 @@ describe('ForgetCodeService', () => {
         mealOptions: [mealOption({ servedAt: new Date('2026-09-20T07:30:00Z'), daysAhead: 0, selfId: 5 })],
       });
 
-      await users.save(withPassword());
+      await users.save(withRefreshToken());
       await seedPool();
 
       const claimed = await forgetCodes.claimTodaysCode(555, 5);
@@ -140,7 +140,7 @@ describe('ForgetCodeService', () => {
     it('explains that a code is useless when there is no meal today', async () => {
       const { forgetCodes } = build({ mealOptions: [] });
 
-      await users.save(withPassword());
+      await users.save(withRefreshToken());
       await seedPool();
 
       // Handing over a code the person cannot spend would look like help and be
@@ -153,7 +153,7 @@ describe('ForgetCodeService', () => {
         mealOptions: [mealOption({ servedAt: new Date('2026-09-20T07:30:00Z'), daysAhead: 0, selfId: 5 })],
       });
 
-      await users.save(withPassword());
+      await users.save(withRefreshToken());
 
       await expectUserMessage(forgetCodes.claimTodaysCode(555, 5), /کد آزادی/);
     });

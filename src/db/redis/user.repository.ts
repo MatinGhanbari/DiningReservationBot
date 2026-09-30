@@ -174,7 +174,7 @@ export class RedisUserRepository implements UserRepository {
         lastName: user.lastName ?? '',
         universityId: String(user.universityId),
         samadUsername: user.samadUsername,
-        encryptedPassword: user.encryptedPassword,
+        encryptedRefreshToken: user.encryptedRefreshToken,
         autoReserveEnabled: user.autoReserveEnabled ? '1' : '0',
         autoReserveSelfId: user.autoReserveSelfId === null ? '' : String(user.autoReserveSelfId),
         creditReminderSentOn: user.creditReminderSentOn ?? '',
@@ -208,7 +208,7 @@ export class RedisUserRepository implements UserRepository {
       lastName: user.lastName ?? '',
       universityId: String(user.universityId),
       samadUsername: user.samadUsername,
-      encryptedPassword: user.encryptedPassword,
+      encryptedRefreshToken: user.encryptedRefreshToken,
       updatedAt: String(user.updatedAt.getTime()),
     });
 
@@ -287,7 +287,7 @@ function toUser(telegramId: number, hash: Record<string, string>, weekdays: read
     lastName: lastName === '' ? null : lastName,
     universityId: intField(hash, 'universityId'),
     samadUsername: hash.samadUsername ?? '',
-    encryptedPassword: hash.encryptedPassword ?? '',
+    encryptedRefreshToken: hash.encryptedRefreshToken ?? '',
     autoReserveEnabled: hash.autoReserveEnabled === '1',
     autoReserveSelfId: nullableIntField(hash, 'autoReserveSelfId'),
     autoReserveWeekdays: weekdays.map(Number).sort((left, right) => left - right),

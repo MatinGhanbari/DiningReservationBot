@@ -19,8 +19,8 @@ const redactPaths = [
   // Credentials by name, wherever they appear.
   'password',
   '*.password',
-  '*.encryptedPassword',
-  'encryptedPassword',
+  '*.encryptedRefreshToken',
+  'encryptedRefreshToken',
   'accessToken',
   '*.accessToken',
   'refreshToken',

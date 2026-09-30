@@ -101,6 +101,18 @@ export interface LoginInput {
   password: string;
 }
 
+/**
+ * Trading a refresh token for a new access token.
+ *
+ * `samadUsername` is carried only to fill in the returned session; Samad's token
+ * endpoint does not need it on this grant.
+ */
+export interface RefreshInput {
+  universityId: number;
+  samadUsername: string;
+  refreshToken: string;
+}
+
 export interface ProgramQuery {
   universityId: number;
   accessToken: string;
@@ -149,6 +161,13 @@ export interface ReservesQuery {
  */
 export interface SamadGateway {
   login(input: LoginInput): Promise<SamadSession>;
+  /**
+   * Renews a session without the password.
+   *
+   * Throws a session-expired error when Samad rejects the refresh token, which
+   * is the user's cue to sign in again — the bot has no other way back in.
+   */
+  refresh(input: RefreshInput): Promise<SamadSession>;
   listSelfs(universityId: number, accessToken: string): Promise<readonly Self[]>;
   listMealOptions(query: ProgramQuery): Promise<readonly MealOption[]>;
   listReserves(query: ReservesQuery): Promise<WeeklyReserves>;

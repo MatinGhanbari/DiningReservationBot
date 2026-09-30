@@ -50,6 +50,8 @@ const settingsSchema = z.object({
     headers: z.record(z.string(), z.string()),
     client: z.object({
       grantType: z.string().min(1),
+      /** The grant that renews a session from the refresh token, once the password is gone. */
+      refreshGrantType: z.string().min(1),
       scope: z.string().min(1),
       basicAuth: z.string().min(1),
       selfType: z.string().min(1),

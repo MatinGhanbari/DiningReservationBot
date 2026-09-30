@@ -121,7 +121,7 @@ export function makeUser(overrides: Partial<User> = {}): User {
     lastName: 'احمدی',
     universityId: 8,
     samadUsername: '99123456',
-    encryptedPassword: 'v1:iv:tag:cipher',
+    encryptedRefreshToken: 'v1:iv:tag:cipher',
     autoReserveEnabled: false,
     autoReserveSelfId: null,
     autoReserveWeekdays: [],
@@ -158,6 +158,9 @@ export interface FakeGatewayOptions {
   reserveOutcome?: ReservationOutcome;
   issuedForgetCode?: Partial<IssuedForgetCode>;
   loginError?: Error;
+  /** What a renewal from the stored refresh token answers. Defaults to a rotated token. */
+  refreshedSession?: Partial<SamadSession>;
+  refreshError?: Error;
   reserveError?: Error;
 }
 
@@ -170,6 +173,7 @@ export interface FakeGatewayOptions {
  */
 export interface FakeSamadGateway extends SamadGateway {
   login: ReturnType<typeof vi.fn>;
+  refresh: ReturnType<typeof vi.fn>;
   listSelfs: ReturnType<typeof vi.fn>;
   listMealOptions: ReturnType<typeof vi.fn>;
   listReserves: ReturnType<typeof vi.fn>;
@@ -181,12 +185,23 @@ export interface FakeSamadGateway extends SamadGateway {
 export function createFakeGateway(options: FakeGatewayOptions = {}): FakeSamadGateway {
   const session: SamadSession = {
     accessToken: 'access-token-1',
+    refreshToken: 'refresh-token-1',
     expiresAt: new Date(TEST_SESSION_EXPIRY_ISO),
     firstName: 'مهدی',
     lastName: 'احمدی',
     samadUsername: '99123456',
     universityId: 8,
     ...options.session,
+  };
+
+  // A renewal answers with a *different* refresh token by default, because that
+  // is the rotation Samad performs: a caller that forgets to persist it works
+  // once and then fails.
+  const refreshed: SamadSession = {
+    ...session,
+    accessToken: 'access-token-2',
+    refreshToken: 'refresh-token-2',
+    ...options.refreshedSession,
   };
 
   const reserves: WeeklyReserves = options.reserves ?? {
@@ -201,6 +216,12 @@ export function createFakeGateway(options: FakeGatewayOptions = {}): FakeSamadGa
         throw options.loginError;
       }
       return session;
+    }),
+    refresh: vi.fn(async () => {
+      if (options.refreshError !== undefined) {
+        throw options.refreshError;
+      }
+      return refreshed;
     }),
     listSelfs: vi.fn(async () => options.selfs ?? []),
     listMealOptions: vi.fn(async () => options.mealOptions ?? []),

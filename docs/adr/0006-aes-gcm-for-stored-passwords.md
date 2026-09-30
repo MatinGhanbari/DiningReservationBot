@@ -66,3 +66,12 @@ if the project expands to several universities.
 
 Passwords stored in the previous format are unreadable. Since users can sign in
 again, no migration was needed.
+
+## Update (2026)
+
+The password is no longer stored at all: [ADR 0010](0010-refresh-tokens-instead-of-stored-passwords.md)
+replaces it with the refresh token Samad issues. Everything above still applies
+unchanged — the same `SecretBox`, the same cipher, the same versioned format, and
+the same reasoning for choosing it. Only the value being protected changed, so
+this record keeps its place, and its consequences (including the `ENCRYPTION_KEY`
+warning) refer to the refresh token from here on.

@@ -14,8 +14,11 @@ export interface LoginResult {
 /**
  * Signing in, signing out, and the profile screen.
  *
- * The password never leaves this class except as ciphertext or as part of an
- * outgoing login request, and it is never logged.
+ * The password never leaves this class except as part of an outgoing login
+ * request, it is never logged, and since ADR 0010 it is not stored either: what
+ * is kept is the refresh token Samad hands back, which is all a later renewal
+ * needs. A deployment whose token endpoint issues no refresh token stores an
+ * empty string, and the user signs in again when the session ends.
  */
 export class AuthService {
   constructor(
@@ -44,7 +47,7 @@ export class AuthService {
       lastName: session.lastName,
       universityId,
       samadUsername,
-      encryptedPassword: this.secretBox.encrypt(password),
+      encryptedRefreshToken: session.refreshToken === null ? '' : this.secretBox.encrypt(session.refreshToken),
       // Preserved across re-login; the repository ignores these columns on update.
       autoReserveEnabled: existing?.autoReserveEnabled ?? false,
       autoReserveSelfId: existing?.autoReserveSelfId ?? null,
@@ -65,9 +68,9 @@ export class AuthService {
   /**
    * Unlinks the account and forgets the token.
    *
-   * Both halves matter: dropping only the token would leave the bot able to log
-   * the user straight back in from the stored password, which is not what
-   * «خروج» (logout) means to the person who tapped it.
+   * Both halves matter: dropping only the token would leave the stored refresh
+   * token able to bring the session straight back, which is not what «خروج»
+   * (logout) means to the person who tapped it.
    */
   async logout(telegramId: number): Promise<void> {
     await Promise.all([this.users.deleteByTelegramId(telegramId), this.sessionService.invalidate(telegramId)]);

@@ -11,8 +11,8 @@ import { type TestStores, createFakeGateway, fixedClock, makeUser, createTestSto
 const KEY = 'a-test-key-that-is-definitely-long-enough-for-the-required-minimum-length';
 
 /** The shared factory stores a placeholder cipher; these tests need a real one. */
-const withPassword = (overrides: Partial<User> = {}): User =>
-  makeUser({ encryptedPassword: new AesSecretBox(KEY).encrypt('old-password'), ...overrides });
+const withRefreshToken = (overrides: Partial<User> = {}): User =>
+  makeUser({ encryptedRefreshToken: new AesSecretBox(KEY).encrypt('old-refresh-token'), ...overrides });
 
 describe('session and auth', () => {
   let stores: TestStores;
@@ -41,7 +41,7 @@ describe('session and auth', () => {
   }
 
   describe('AuthService.login', () => {
-    it('links the account and stores the password encrypted', async () => {
+    it('links the account, keeps the refresh token and stores no password', async () => {
       const { auth, gateway } = build();
 
       const result = await auth.login(555, 8, '99123456', 'my-password');
@@ -51,25 +51,28 @@ describe('session and auth', () => {
       expect(gateway.login).toHaveBeenCalledWith({ universityId: 8, samadUsername: '99123456', password: 'my-password' });
 
       const stored = await users.findByTelegramId(555);
-      expect(stored?.encryptedPassword).not.toContain('my-password');
-      expect(secretBox.decrypt(stored?.encryptedPassword ?? '')).toBe('my-password');
+      expect(stored?.encryptedRefreshToken).not.toContain('refresh-token-1');
+      expect(secretBox.decrypt(stored?.encryptedRefreshToken ?? '')).toBe('refresh-token-1');
+
+      // The password is used once and dropped: nothing in the record holds it.
+      expect(JSON.stringify(stored)).not.toContain('my-password');
     });
 
     it('does not touch stored credentials when Samad rejects the login', async () => {
       const { auth } = build(createFakeGateway({ loginError: new InvalidCredentialsError() }));
-      await users.save(withPassword());
+      await users.save(withRefreshToken());
 
       await expect(auth.login(555, 8, '99123456', 'wrong')).rejects.toBeInstanceOf(InvalidCredentialsError);
 
-      // A wrong password must not overwrite the one that already worked.
+      // A failed sign-in must not overwrite a token that already worked.
       const stored = await users.findByTelegramId(555);
-      expect(secretBox.decrypt(stored?.encryptedPassword ?? '')).toBe('old-password');
+      expect(secretBox.decrypt(stored?.encryptedRefreshToken ?? '')).toBe('old-refresh-token');
     });
 
     it('keeps auto-reserve configuration across a re-login', async () => {
       const { auth } = build();
 
-      await users.save(withPassword());
+      await users.save(withRefreshToken());
       await users.setAutoReserveSelf(555, 5);
       await users.setAutoReserveEnabled(555, true);
       await users.toggleAutoReserveWeekday(555, 1);
@@ -110,7 +113,7 @@ describe('session and auth', () => {
       expect(gateway.login).not.toHaveBeenCalled();
     });
 
-    it('logs in again with the stored password once the token has expired', async () => {
+    it('renews from the stored refresh token once the access token has expired', async () => {
       const { auth, sessionService, gateway } = build();
 
       await auth.login(555, 8, '99123456', 'my-password');
@@ -121,26 +124,60 @@ describe('session and auth', () => {
 
       const { accessToken } = await sessionService.getAccessToken(555);
 
-      expect(accessToken).toBe('access-token-1');
-      expect(gateway.login).toHaveBeenCalledWith({
+      expect(accessToken).toBe('access-token-2');
+
+      // Samad is handed the token it issued, never the password again.
+      expect(gateway.login).not.toHaveBeenCalled();
+      expect(gateway.refresh).toHaveBeenCalledWith({
         universityId: 8,
         samadUsername: '99123456',
-        password: 'my-password',
+        refreshToken: 'refresh-token-1',
       });
+    });
+
+    it('renews with the rotated token, not the one it already spent', async () => {
+      const { auth, sessionService, gateway } = build();
+
+      await auth.login(555, 8, '99123456', 'my-password');
+
+      clock.advance(2 * 60 * 60 * 1000);
+      await sessionService.getAccessToken(555);
+
+      // Samad replaces the refresh token when it is used, so the first one is
+      // spent: a second renewal only works if the new one was written back.
+      clock.advance(2 * 60 * 60 * 1000);
+      await sessionService.getAccessToken(555);
+
+      expect(gateway.refresh).toHaveBeenLastCalledWith({
+        universityId: 8,
+        samadUsername: '99123456',
+        refreshToken: 'refresh-token-2',
+      });
+    });
+
+    it('asks the user to sign in again when no refresh token was issued', async () => {
+      const { auth, sessionService } = build(createFakeGateway({ session: { refreshToken: null } }));
+
+      await auth.login(555, 8, '99123456', 'my-password');
+      clock.advance(2 * 60 * 60 * 1000);
+
+      // Nothing to renew with, and no password to fall back on: signing in is
+      // the only way forward, so that is what the user is told.
+      await expect(sessionService.getAccessToken(555)).rejects.toBeInstanceOf(SessionExpiredError);
     });
 
     it('refreshes early rather than letting a token die mid-request', async () => {
       const { auth, sessionService, gateway } = build();
 
       await auth.login(555, 8, '99123456', 'my-password');
-      gateway.login.mockClear();
+      gateway.refresh.mockClear();
 
       // The stored session is still technically valid here, but only just.
       clock.advance(59 * 60 * 1000);
 
       await sessionService.getAccessToken(555);
 
-      expect(gateway.login).toHaveBeenCalled();
+      expect(gateway.refresh).toHaveBeenCalled();
     });
 
     it('reports an expired session when the account is not linked', async () => {

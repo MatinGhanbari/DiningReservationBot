@@ -1,5 +1,5 @@
 import { config } from '../config/env';
-import type { SamadSession } from '../domain/models';
+import type { SamadSession, User } from '../domain/models';
 import type { Clock, SamadGateway, SecretBox, SessionStore, TokenProvider, UserRepository } from '../domain/ports';
 import { SessionExpiredError } from '../shared/errors';
 import { scopedLogger } from '../shared/logger';
@@ -56,21 +56,59 @@ export class SessionService implements TokenProvider {
       throw new SessionExpiredError({ context: { telegramId, reason: 'no-linked-account' } });
     }
 
-    // The stored password is what makes re-login invisible to the user. It is
-    // decrypted only here, only for as long as the request needs it.
-    const password = this.secretBox.decrypt(user.encryptedPassword);
-
-    log.debug({ telegramId, universityId: user.universityId }, 'refreshing expired Samad session');
-
-    const session = await this.gateway.login({
-      universityId: user.universityId,
-      samadUsername: user.samadUsername,
-      password,
-    });
+    const session = await this.renew(telegramId, user);
 
     await this.sessions.set(telegramId, session, this.ttlFor(session));
 
     return { accessToken: session.accessToken, universityId: session.universityId };
+  }
+
+  /**
+   * Renews the session from the stored refresh token.
+   *
+   * No password is kept, so this is the only way back in. When there is nothing
+   * usable to renew with — no token stored, a token that no longer decrypts, or
+   * one Samad rejects — the user is sent back to the sign-in screen, which is the
+   * one action that can fix it.
+   */
+  private async renew(telegramId: number, user: User): Promise<SamadSession> {
+    if (user.encryptedRefreshToken.length === 0) {
+      throw new SessionExpiredError({ context: { telegramId, reason: 'no-refresh-token' } });
+    }
+
+    let refreshToken: string;
+
+    try {
+      refreshToken = this.secretBox.decrypt(user.encryptedRefreshToken);
+    } catch (error) {
+      // A key that changed under a running deployment makes every stored token
+      // unreadable at once. That is not an internal fault to the user; it is a
+      // sign-in, which also re-encrypts under the current key.
+      log.warn({ err: error, telegramId }, 'the stored refresh token could not be decrypted');
+      throw new SessionExpiredError({ context: { telegramId, reason: 'unreadable-refresh-token' } });
+    }
+
+    log.debug({ telegramId, universityId: user.universityId }, 'renewing the Samad session');
+
+    const session = await this.gateway.refresh({
+      universityId: user.universityId,
+      samadUsername: user.samadUsername,
+      refreshToken,
+    });
+
+    // Samad hands back a refresh token on every renewal. The captured web client
+    // ignores it and keeps the one it has, which suggests the same token comes
+    // back — but if it is ever rotated instead, the old one is spent and the next
+    // renewal would fail with it. Writing the new one costs a single write on a
+    // path that runs once an hour per user, and removes that failure mode.
+    //
+    // Written through the existing credential path: `save` refreshes credentials
+    // on an account that already exists and leaves the rest of the record alone.
+    if (session.refreshToken !== null && session.refreshToken !== refreshToken) {
+      await this.users.save({ ...user, encryptedRefreshToken: this.secretBox.encrypt(session.refreshToken) });
+    }
+
+    return session;
   }
 
   async invalidate(telegramId: number): Promise<void> {

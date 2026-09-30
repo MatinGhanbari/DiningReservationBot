@@ -15,7 +15,7 @@ const KEY = 'a-test-key-that-is-definitely-long-enough-for-the-required-minimum-
 /** Auto-reserve only ever runs for someone who has switched it on. */
 const autoReserveUser = (overrides: Partial<User> = {}): User =>
   makeUser({
-    encryptedPassword: new AesSecretBox(KEY).encrypt('my-password'),
+    encryptedRefreshToken: new AesSecretBox(KEY).encrypt('refresh-token-1'),
     autoReserveEnabled: true,
     autoReserveSelfId: 5,
     autoReserveWeekdays: [3],

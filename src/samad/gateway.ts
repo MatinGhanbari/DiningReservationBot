@@ -8,7 +8,7 @@ import type {
   UserProfile,
   WeeklyReserves,
 } from '../domain/models';
-import type { LoginInput, ProgramQuery, ReserveInput, ReservesQuery, SamadGateway } from '../domain/ports';
+import type { LoginInput, ProgramQuery, RefreshInput, ReserveInput, ReservesQuery, SamadGateway } from '../domain/ports';
 import { samadRoute, samadSettings } from '../config/appsettings';
 import { config } from '../config/env';
 import { toMealDateKey } from '../shared/dates';
@@ -126,11 +126,48 @@ export class SamadApiGateway implements SamadGateway {
       onUnauthorized: 'invalid-credentials',
     });
 
+    return this.toSession(response, input);
+  }
+
+  /**
+   * Trades the stored refresh token for a new access token.
+   *
+   * This is what replaced the stored password: the password is asked for once,
+   * and every renewal after that uses the token Samad itself issued.
+   *
+   * The body mirrors the captured web client exactly, which is how this call was
+   * verified: on a `401` from any endpoint but the token endpoint, that client
+   * posts `grant_type=refresh_token&refresh_token=…` with the same Basic
+   * credential and nothing else. No `scope` — the grant reuses the scope of the
+   * token being renewed.
+   *
+   * A rejected refresh token is a dead end by design, so the `401` stays a
+   * session-expired error here rather than being reported as a wrong password.
+   */
+  async refresh(input: RefreshInput): Promise<SamadSession> {
+    const response = await this.http.request<SamadTokenResponse>({
+      universityId: input.universityId,
+      path: samadRoute('login'),
+      method: 'POST',
+      extraHeaders: { authorization: SAMAD_MOBILE_BASIC_AUTH },
+      formBody: {
+        grant_type: samadSettings.client.refreshGrantType,
+        refresh_token: input.refreshToken,
+      },
+    });
+
+    return this.toSession(response, input);
+  }
+
+  /**
+   * Maps a token-endpoint response onto a session.
+   *
+   * Shared by both grants because they answer in the same shape, and because a
+   * missing `access_token` means the same thing either way.
+   */
+  private toSession(response: SamadTokenResponse, input: { universityId: number; samadUsername: string }): SamadSession {
     if (typeof response.access_token !== 'string' || response.access_token.length === 0) {
-      throw new UpstreamRejectedError(
-        'Samad login succeeded but returned no access token',
-        'سماد پاسخ نامعتبری داد. لطفاً یک‌بار دیگر امتحان کن.',
-      );
+      throw new UpstreamRejectedError('Samad returned no access token', 'سماد پاسخ نامعتبری داد. لطفاً یک‌بار دیگر امتحان کن.');
     }
 
     // Samad reports lifetime in seconds. Falling back to an hour keeps a missing
@@ -139,6 +176,9 @@ export class SamadApiGateway implements SamadGateway {
 
     return {
       accessToken: response.access_token,
+      // Kept when Samad issues one and null otherwise: the caller has to know
+      // whether a renewal is possible at all.
+      refreshToken: typeof response.refresh_token === 'string' && response.refresh_token.length > 0 ? response.refresh_token : null,
       expiresAt: new Date(Date.now() + expiresInSeconds * 1_000),
       firstName: cleanText(response.first_name, 'دانشجو'),
       lastName: typeof response.last_name === 'string' ? cleanText(response.last_name) : null,

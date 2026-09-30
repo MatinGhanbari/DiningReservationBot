@@ -15,10 +15,11 @@ Format: **Status**, **Date**, **Context**, **Decision**, **Consequences**
 | [0003](0003-layered-architecture.md) | Layered architecture with ports and adapters | Accepted |
 | [0004](0004-health-server-instead-of-express.md) | A hand-written health server instead of Express | Accepted |
 | [0005](0005-single-container-deployment.md) | Single-container deployment | Accepted |
-| [0006](0006-aes-gcm-for-stored-passwords.md) | AES-256-GCM for stored passwords | Accepted |
+| [0006](0006-aes-gcm-for-stored-passwords.md) | AES-256-GCM for stored passwords | Accepted (the cipher; the stored secret is now the refresh token — see 0010) |
 | [0007](0007-centralized-persian-copy.md) | Centralised Persian copy | Accepted |
 | [0008](0008-acknowledge-before-processing.md) | Acknowledge webhook deliveries before processing them | Accepted |
 | [0009](0009-redis-for-all-storage.md) | Redis for all storage, instead of SQLite | Accepted |
+| [0010](0010-refresh-tokens-instead-of-stored-passwords.md) | Refresh tokens instead of stored passwords | Accepted |
 
 ## Adding a record
 
