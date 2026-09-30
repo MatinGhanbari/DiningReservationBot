@@ -3,8 +3,16 @@
 #
 #  Two containers: the bot, and the Redis it keeps everything in. Redis is not
 #  published to the host, so the only way to reach it is from inside this compose
-#  network — which is also why it needs no password here. If it ever has to be
-#  reachable from elsewhere, set one and put it in REDIS_URL in `.env`.
+#  network — and it is password-protected anyway, because the only thing between
+#  a published port and every account is a typo in a `ports:` line.
+#
+#  That password is REDIS_PASSWORD in `.env`; `.env.example` says how to make one.
+#  Compose reads the same value twice — into `redis-server --requirepass`, and
+#  into the bot's REDIS_URL — so the server and the client cannot disagree.
+#
+#  Both containers have to be recreated together: `docker compose up -d`, never
+#  `docker compose restart` (which keeps the old command and leaves the server
+#  without a password while the bot sends one).
 #
 #  Why the bot is still one container and not several: conversation state and
 #  sessions are held in this process's memory, and the auto-reserve scheduler
@@ -34,6 +42,10 @@ services:
     #
     # The RDB snapshots are switched off so there is exactly one file to reason
     # about and one thing to restore.
+    #
+    # `--requirepass` refuses every command that arrives without an AUTH. It is
+    # not stored in the append-only file, so turning it on does not touch the
+    # data: the volume below keeps every account exactly as it was.
     command:
       - redis-server
       - --appendonly
@@ -42,6 +54,14 @@ services:
       - everysec
       - --save
       - ''
+      - --requirepass
+      - '${REDIS_PASSWORD:?REDIS_PASSWORD is not set - add it to .env, generate one with: openssl rand -hex 32}'
+
+    # redis-cli reads REDISCLI_AUTH on its own, so the healthcheck below and any
+    # `docker compose exec redis redis-cli …` (the backup commands in the README)
+    # authenticate without the password appearing on a command line.
+    environment:
+      REDISCLI_AUTH: '${REDIS_PASSWORD:?REDIS_PASSWORD is not set - add it to .env, generate one with: openssl rand -hex 32}'
 
     volumes:
       # The whole dataset. Losing this volume means every user has to sign in
@@ -93,7 +113,7 @@ services:
     # has to be on the volume rather than in the project's relative directory.
     environment:
       NODE_ENV: production
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: 'redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is not set - add it to .env, generate one with: openssl rand -hex 32}@redis:6379'
       DATA_DIR: /app/data
       TZ: ${TZ:-Asia/Tehran}
 
