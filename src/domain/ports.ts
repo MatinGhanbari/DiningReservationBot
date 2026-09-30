@@ -22,9 +22,9 @@ import type {
 /**
  * Ports — the interfaces the application layer depends on.
  *
- * Everything here is async even though the current SQLite driver is synchronous.
- * That is a deliberate trade: it costs an `await` today and buys the ability to
- * move a store to a networked database later without touching a single caller.
+ * Everything here is async because the stores are behind a connection. The
+ * original SQLite driver was synchronous, which made the `await`s look like
+ * ceremony; Redis is not, so they are now load-bearing.
  */
 
 export interface UserRepository {
@@ -218,7 +218,6 @@ export interface ChatbotRepository {
   countForUserSince(telegramId: number, since: Date): Promise<number>;
   countSince(since: Date): Promise<number>;
   countUsersSince(since: Date): Promise<number>;
-  recent(limit: number): Promise<readonly ChatbotMessageRow[]>;
   /** The questions people asked, most recent first, for the admin report. */
   recentQuestions(limit: number): Promise<readonly ChatbotMessageRow[]>;
   purgeBefore(cutoff: Date): Promise<number>;
@@ -287,21 +286,9 @@ export interface SettingsRepository {
 }
 
 export interface DatabaseSize {
+  /** The resident size of the dataset. */
   databaseBytes: number;
-  walBytes: number;
-}
-
-/** Introspection the admin panel and the health endpoint report on. */
-export interface SystemProbe {
-  size(): Promise<DatabaseSize>;
-  schemaVersion(): Promise<number>;
-  /** Writes a consistent copy of the database and returns its size in bytes. */
-  snapshot(path: string): Promise<number>;
-}
-
-export interface DatabaseSize {
-  databaseBytes: number;
-  /** The write-ahead log, which can be larger than the database between checkpoints. */
+  /** The append-only log beside it, which is what a crash would replay. Zero when persistence is RDB-only. */
   walBytes: number;
 }
 

@@ -35,7 +35,7 @@ const PLACEHOLDER = /\{([a-zA-Z0-9_]+)\}/g;
 export function localesDirectory(): string {
   const configured = config.LOCALES_DIR.trim();
 
-  return configured.length > 0 ? resolve(configured) : join(dirname(resolve(config.DATABASE_PATH)), 'locales');
+  return configured.length > 0 ? resolve(configured) : join(resolve(config.DATA_DIR), 'locales');
 }
 
 export function catalogPath(locale: string): string {

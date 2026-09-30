@@ -4,13 +4,11 @@ import { ReservationService } from '../src/app/reservation.service';
 import { SessionService } from '../src/app/session.service';
 import { MemorySessionStore } from '../src/cache/session.store';
 import { AesSecretBox } from '../src/crypto/secret-box';
-import type { SqliteDatabase } from '../src/db/database';
-import { SqliteUserRepository } from '../src/db/user.repository';
 import type { Notifier } from '../src/domain/ports';
 import type { User } from '../src/domain/models';
 import { SessionExpiredError } from '../src/shared/errors';
 import { FixedClock } from '../src/shared/clock';
-import { createFakeGateway, createTestDatabase, fixedClock, makeUser, mealOption } from './helpers';
+import { type TestStores, createFakeGateway, fixedClock, makeUser, mealOption, createTestStores } from './helpers';
 
 const KEY = 'a-test-key-that-is-definitely-long-enough-for-the-required-minimum-length';
 
@@ -35,18 +33,18 @@ function createFakeNotifier(): Notifier & { notify: ReturnType<typeof vi.fn> } {
 }
 
 describe('AutoReserveService', () => {
-  let db: SqliteDatabase;
-  let users: SqliteUserRepository;
+  let stores: TestStores;
+  let users: TestStores['users'];
   let clock: FixedClock;
 
   beforeEach(() => {
-    db = createTestDatabase();
-    users = new SqliteUserRepository(db);
+    stores = createTestStores();
+    users = stores.users;
     clock = fixedClock(NOW);
   });
 
-  afterEach(() => {
-    db.close();
+  afterEach(async () => {
+    await stores.cleanup();
   });
 
   function build(options: Parameters<typeof createFakeGateway>[0] = {}) {

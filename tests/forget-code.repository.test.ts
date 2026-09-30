@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { SqliteDatabase } from '../src/db/database';
-import { SqliteForgetCodeRepository } from '../src/db/forget-code.repository';
-import { createTestDatabase } from './helpers';
+import { type TestStores, createTestStores } from './helpers';
 
 const baseCode = {
   code: 'CODE-1',
@@ -12,17 +10,17 @@ const baseCode = {
   sharedByTelegramId: 100,
 };
 
-describe('SqliteForgetCodeRepository', () => {
-  let db: SqliteDatabase;
-  let codes: SqliteForgetCodeRepository;
+describe('RedisForgetCodeRepository', () => {
+  let stores: TestStores;
+  let codes: TestStores['forgetCodes'];
 
   beforeEach(() => {
-    db = createTestDatabase();
-    codes = new SqliteForgetCodeRepository(db);
+    stores = createTestStores();
+    codes = stores.forgetCodes;
   });
 
-  afterEach(() => {
-    db.close();
+  afterEach(async () => {
+    await stores.cleanup();
   });
 
   it('stores a code and reports that it is available', async () => {

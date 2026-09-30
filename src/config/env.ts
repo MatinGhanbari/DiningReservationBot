@@ -156,11 +156,38 @@ const EnvSchema = z.object({
     .regex(/^[A-Za-z0-9_-]{0,256}$/, 'کلید مخفی وبهوک فقط می‌تواند حروف، رقم، _ و - داشته باشد (حداکثر ۲۵۶ کاراکتر).')
     .default(''),
 
-  // Database
-  DATABASE_PATH: z.string().min(1).default('./data/bot.db'),
-  DB_BUSY_TIMEOUT_MS: positiveInteger(5_000),
-  DB_CACHE_MB: positiveInteger(64),
-  DB_MMAP_MB: positiveInteger(256),
+  // Storage
+  /**
+   * The Redis this bot keeps everything in.
+   *
+   * Redis holds the whole dataset — users, tickets, forget codes, transcripts —
+   * so a deployment that loses this connection has no data at all. Durability is
+   * the server's job: run it with an append-only file on a persisted volume, or
+   * a restart silently discards every account.
+   */
+  REDIS_URL: z
+    .string()
+    .default('redis://127.0.0.1:6379')
+    .refine(value => value.startsWith('redis://') || value.startsWith('rediss://'), {
+      message: 'آدرس ردیس باید با redis:// یا rediss:// شروع شود. نمونه: redis://127.0.0.1:6379',
+    }),
+  /**
+   * Namespace for every key this bot owns.
+   *
+   * Only matters when the Redis is shared with another application; changing it
+   * on a running deployment makes the existing data invisible.
+   */
+  REDIS_KEY_PREFIX: z
+    .string()
+    .regex(/^[A-Za-z0-9:_-]{0,64}$/, 'پیشوند کلیدها فقط می‌تواند حروف، رقم، : و - داشته باشد (حداکثر ۶۴ کاراکتر).')
+    .default('drb:'),
+  /**
+   * Where the operator-editable text catalog lives.
+   *
+   * Not in Redis: it is a file a human edits, and it has to be on a volume for
+   * those edits to survive a container.
+   */
+  DATA_DIR: z.string().min(1).default('./data'),
 
   // Security
   ENCRYPTION_KEY: z

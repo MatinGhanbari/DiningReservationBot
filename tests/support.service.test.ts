@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SupportService } from '../src/app/support.service';
-import { SqliteSupportRepository } from '../src/db/support.repository';
-import type { SqliteDatabase } from '../src/db/database';
 import type { SupportEnvelope } from '../src/domain/models';
 import type { SupportMessenger } from '../src/domain/ports';
-import { createTestDatabase, expectUserMessage } from './helpers';
+import { type TestStores, expectUserMessage, createTestStores } from './helpers';
 
 /**
  * Support routing is the one place where a bug means a real person's message goes
@@ -100,9 +98,10 @@ const envelope = (overrides: Partial<SupportEnvelope> = {}): SupportEnvelope => 
   ...overrides,
 });
 
+let stores: TestStores;
+
 function build(options: { messenger?: FakeMessenger; adminIds?: readonly number[] } = {}) {
-  const db: SqliteDatabase = createTestDatabase();
-  const tickets = new SqliteSupportRepository(db);
+  const tickets = stores.support;
   const messenger = options.messenger ?? createFakeMessenger({ adminIds: options.adminIds });
 
   // A clock the test can move: the relay cooldown is time-based, and a test that
@@ -110,18 +109,16 @@ function build(options: { messenger?: FakeMessenger; adminIds?: readonly number[
   let now = 1_000_000;
   const service = new SupportService(tickets, messenger, () => now);
 
-  return { db, tickets, messenger, service, advance: (ms: number) => (now += ms) };
+  return { tickets, messenger, service, advance: (ms: number) => (now += ms) };
 }
 
 describe('SupportService', () => {
-  let db: SqliteDatabase;
-
   beforeEach(() => {
-    db = createTestDatabase();
+    stores = createTestStores();
   });
 
-  afterEach(() => {
-    db.close();
+  afterEach(async () => {
+    await stores.cleanup();
   });
 
   it('opens one ticket and reuses it for a follow-up', async () => {

@@ -4,13 +4,19 @@ import { ReservationService } from '../src/app/reservation.service';
 import { SessionService } from '../src/app/session.service';
 import { MemorySessionStore } from '../src/cache/session.store';
 import { AesSecretBox } from '../src/crypto/secret-box';
-import type { SqliteDatabase } from '../src/db/database';
-import { SqliteForgetCodeReportRepository, SqliteForgetCodeRepository } from '../src/db/forget-code.repository';
-import { SqliteUserRepository } from '../src/db/user.repository';
 import type { User } from '../src/domain/models';
 import { NotFoundError, UpstreamRejectedError } from '../src/shared/errors';
 import { FixedClock } from '../src/shared/clock';
-import { createFakeGateway, createTestDatabase, expectUserMessage, fixedClock, makeUser, mealOption, reservedMeal } from './helpers';
+import {
+  type TestStores,
+  createFakeGateway,
+  expectUserMessage,
+  fixedClock,
+  makeUser,
+  mealOption,
+  reservedMeal,
+  createTestStores,
+} from './helpers';
 
 const KEY = 'a-test-key-that-is-definitely-long-enough-for-the-required-minimum-length';
 
@@ -22,22 +28,22 @@ const withPassword = (overrides: Partial<User> = {}): User =>
 const NOW = '2026-09-20T06:00:00Z';
 
 describe('ForgetCodeService', () => {
-  let db: SqliteDatabase;
-  let users: SqliteUserRepository;
-  let codes: SqliteForgetCodeRepository;
-  let reports: SqliteForgetCodeReportRepository;
+  let stores: TestStores;
+  let users: TestStores['users'];
+  let codes: TestStores['forgetCodes'];
+  let reports: TestStores['forgetCodeReports'];
   let clock: FixedClock;
 
   beforeEach(() => {
-    db = createTestDatabase();
-    users = new SqliteUserRepository(db);
-    codes = new SqliteForgetCodeRepository(db);
-    reports = new SqliteForgetCodeReportRepository(db);
+    stores = createTestStores();
+    users = stores.users;
+    codes = stores.forgetCodes;
+    reports = stores.forgetCodeReports;
     clock = fixedClock(NOW);
   });
 
-  afterEach(() => {
-    db.close();
+  afterEach(async () => {
+    await stores.cleanup();
   });
 
   function build(overrides: Parameters<typeof createFakeGateway>[0] = {}) {
@@ -165,8 +171,11 @@ describe('ForgetCodeService', () => {
 
       await forgetCodes.reportBadCode(555, '  BROKEN-1  ');
 
-      const row = db.prepare('SELECT code FROM forget_code_reports').get() as { code: string };
-      expect(row.code).toBe('BROKEN-1');
+      // The id counter starts at one for a fresh key prefix.
+      const report = await stores.store.client.hgetall(stores.store.forgetCodeReport(1));
+
+      expect(report.code).toBe('BROKEN-1');
+      expect(report.telegramId).toBe('555');
     });
 
     it('rejects an empty report', async () => {

@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatbotService } from '../src/app/chatbot.service';
-import { SqliteChatbotRepository } from '../src/db/chatbot.repository';
-import type { SqliteDatabase } from '../src/db/database';
 import type { AssistantGateway } from '../src/domain/ports';
 import type { ChatTurn } from '../src/domain/models';
-import { createTestDatabase, expectUserMessage, fixedClock } from './helpers';
+import { type TestStores, expectUserMessage, fixedClock, createTestStores } from './helpers';
 
 /**
  * The chatbot is the one place in this bot where a user's text is handed to
@@ -20,23 +18,22 @@ function fakeAssistant(answer = 'جواب تست'): AssistantGateway & { answer:
   return { answer: vi.fn(async () => answer) };
 }
 
+let stores: TestStores;
+
 function build(options: { assistant?: AssistantGateway | null; answer?: string } = {}) {
-  const db: SqliteDatabase = createTestDatabase();
-  const messages = new SqliteChatbotRepository(db);
+  const messages = stores.chatbot;
   const assistant = options.assistant === undefined ? fakeAssistant(options.answer) : options.assistant;
 
   return { messages, service: new ChatbotService(assistant, messages, fixedClock()), assistant };
 }
 
 describe('ChatbotService', () => {
-  let db: SqliteDatabase;
-
   beforeEach(() => {
-    db = createTestDatabase();
+    stores = createTestStores();
   });
 
-  afterEach(() => {
-    db.close();
+  afterEach(async () => {
+    await stores.cleanup();
   });
 
   it('reports itself unavailable when no model is configured', () => {

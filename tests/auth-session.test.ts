@@ -3,12 +3,10 @@ import { AuthService } from '../src/app/auth.service';
 import { SessionService } from '../src/app/session.service';
 import { MemorySessionStore } from '../src/cache/session.store';
 import { AesSecretBox } from '../src/crypto/secret-box';
-import type { SqliteDatabase } from '../src/db/database';
-import { SqliteUserRepository } from '../src/db/user.repository';
 import type { User } from '../src/domain/models';
 import { InvalidCredentialsError, SessionExpiredError } from '../src/shared/errors';
 import { FixedClock } from '../src/shared/clock';
-import { createFakeGateway, createTestDatabase, fixedClock, makeUser } from './helpers';
+import { type TestStores, createFakeGateway, fixedClock, makeUser, createTestStores } from './helpers';
 
 const KEY = 'a-test-key-that-is-definitely-long-enough-for-the-required-minimum-length';
 
@@ -17,22 +15,22 @@ const withPassword = (overrides: Partial<User> = {}): User =>
   makeUser({ encryptedPassword: new AesSecretBox(KEY).encrypt('old-password'), ...overrides });
 
 describe('session and auth', () => {
-  let db: SqliteDatabase;
-  let users: SqliteUserRepository;
+  let stores: TestStores;
+  let users: TestStores['users'];
   let sessions: MemorySessionStore;
   let secretBox: AesSecretBox;
   let clock: FixedClock;
 
   beforeEach(() => {
-    db = createTestDatabase();
-    users = new SqliteUserRepository(db);
+    stores = createTestStores();
+    users = stores.users;
     clock = fixedClock('2026-09-20T06:00:00Z');
     sessions = new MemorySessionStore(clock);
     secretBox = new AesSecretBox(KEY);
   });
 
-  afterEach(() => {
-    db.close();
+  afterEach(async () => {
+    await stores.cleanup();
   });
 
   function build(gateway = createFakeGateway()) {

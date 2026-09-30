@@ -5,7 +5,8 @@
   "license": "MIT",
   "private": true,
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.0.0",
+    "npm": ">=11.19.0"
   },
   "main": "dist/main.js",
   "scripts": {
@@ -22,7 +23,7 @@
     "format:check": "prettier --check \"{src,tests}/**/*.ts\""
   },
   "dependencies": {
-    "better-sqlite3": "^11.7.0",
+    "ioredis": "^6.0.0",
     "node-cron": "^4.6.0",
     "pino": "^9.5.0",
     "telegraf": "^4.16.3",
@@ -30,7 +31,6 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.2",
     "@types/node-cron": "^3.0.11",
     "@typescript-eslint/eslint-plugin": "^8.18.1",

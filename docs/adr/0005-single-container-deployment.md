@@ -65,3 +65,14 @@ say — auto-reserve does not happen that day. Because auto-reserve works *ahead
 capacity filling up* rather than at the moment of the meal, missing one run means
 losing a day. If that becomes important, the next step is to run auto-reserve at
 container start-up, not to add a replica.
+
+## Update (2026-09-30)
+
+The deployment is no longer a single container: Redis runs beside the bot, with its
+own volume, and the bot waits for its health check before starting. See
+[ADR 9](0009-redis-for-all-storage.md).
+
+The reason this record gives for staying single-container is untouched — sessions,
+conversation state and the scheduler are still in-process, so two bot replicas
+would still lose a user mid-wizard. The `bot-data` volume now holds only the
+operator-editable text catalog; the data is on `redis-data`.

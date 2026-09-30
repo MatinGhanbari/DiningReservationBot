@@ -11,10 +11,14 @@ students, and routes support messages to the operators.
 > All documentation and code comments are English, so the project is readable to
 > anyone; the product itself is for Persian-speaking students.
 
-This project is a complete rewrite of an earlier version: the database moved from
-MongoDB to SQLite, Redis and Express were removed, the code was split into
-independent layers, and every user-facing string was rewritten to follow Persian
-orthography rules.
+This project is a complete rewrite of an earlier version: the code was split into
+independent layers, Express was removed, and every user-facing string was rewritten
+to follow Persian orthography rules.
+
+Storage is Redis. It went MongoDB -> SQLite -> Redis: SQLite was chosen to avoid a
+network hop on the path of every message, and Redis was adopted later for
+durability and operational simplicity, at the cost of that hop. The reasoning, and
+what it costs, is in [ADR 0009](docs/adr/0009-redis-for-all-storage.md).
 
 ---
 
@@ -72,7 +76,7 @@ src/
 │   ├── forget-code.service.ts   forget-code pool
 │   └── auto-reserve.service.ts  automatic reservation
 │
-├── db/              SQLite and the repositories
+├── db/redis/        Redis keyspace and the repositories
 ├── cache/           in-memory cache (sessions, conversation state)
 ├── crypto/          password encryption
 ├── config/          configuration
@@ -95,7 +99,7 @@ src/
 ```
 
 **Why this structure.** Every layer can be tested on its own. `ForgetCodeService`
-needs no Telegram, no network and no real database to be exercised — which was
+needs no Telegram, no network and no real Redis to be exercised — which was
 impossible in the previous version, where services constructed each other inside
 their own constructors and `AuthService` and `UserService` formed a dependency
 cycle.
@@ -155,7 +159,9 @@ matter most:
 | `ADMINS` | — | **Required.** JSON array of numeric admin ids |
 | `ENCRYPTION_KEY` | — | **Required.** At least 64 characters; encrypts user passwords |
 | `SAMAD_BASIC_AUTH` | empty | Samad client credential, `Basic <base64>`. Empty makes the Samad login fail with `401` |
-| `DATABASE_PATH` | `./data/bot.db` | SQLite file path |
+| `REDIS_URL` | `redis://127.0.0.1:6379` | The Redis holding all of the data |
+| `REDIS_KEY_PREFIX` | `drb:` | Namespace for every key, if the Redis is shared |
+| `DATA_DIR` | `./data` | Directory holding the operator-editable text catalog |
 | `TELEGRAM_WEBHOOK_URL` | empty | Public HTTPS webhook address. Empty means long polling |
 | `TELEGRAM_WEBHOOK_PATH` | empty | Local route to serve the webhook on, when a proxy rewrites the path. Empty means the URL's own path |
 | `TELEGRAM_WEBHOOK_SECRET` | empty | Webhook secret, to reject forged requests |
@@ -293,10 +299,10 @@ TELEGRAM_WEBHOOK_SECRET=<openssl rand -hex 32>
 | Route | Meaning |
 | --- | --- |
 | `GET /health` | Liveness. Always `200` while the process is up |
-| `GET /ready` | Readiness. Runs a real database query, and answers `503` on failure |
+| `GET /ready` | Readiness. Runs a real Redis query, and answers `503` on failure |
 
-The distinction matters: a process whose database has been removed from under it
-is still "alive" but cannot do useful work.
+The distinction matters: a process whose Redis is unreachable is still "alive" but
+cannot do useful work.
 
 The port is published on `127.0.0.1` only, because this service has no
 authentication and exposing it on `0.0.0.0` would make the user count and the
@@ -319,9 +325,10 @@ git pull
 docker compose up -d --build
 ```
 
-Database migrations run automatically at start-up. Each migration runs in a
-transaction tagged with its version number, so a half-applied migration cannot be
-left behind.
+There are no migrations: Redis has no schema to create, so the keyspace is defined
+entirely by `src/db/redis/store.ts`, which is the only place that names a key. The
+admin panel still reports a schema version, and it is a number an operator bumps by
+hand when a keyspace change needs action from them.
 
 ### Rolling back
 
@@ -330,36 +337,46 @@ git checkout <commit>
 docker compose up -d --build
 ```
 
-Migrations are forward-only and never destructive, so a newer schema stays
-compatible with older code.
+The keyspace is forward-only and additive, so a newer version stays compatible
+with older keys. A change that removes a structure is the one case that needs a
+migration note.
 
 ### Shutdown
 
 The container gets up to 8 seconds on `SIGTERM`: the scheduler stops, the bot and
-the health server close, and a final WAL checkpoint runs before the database is
-closed, so the next start-up does not have to replay the log.
+the health server close, in-flight updates are drained, and the Redis connection is
+closed. Nothing is flushed — Redis owns its own persistence, and the AOF is written
+as commands arrive rather than at shutdown.
 
 ---
 
 ## Backup and restore
 
-The database is SQLite, so a backup is a file copy — but a plain copy can be
-inconsistent while WAL is active. Use `VACUUM INTO`, which produces a consistent,
-compacted copy:
+The data lives in the `redis-data` volume, and the container writes an
+append-only file into it. There are two ways to take a copy.
+
+**The whole server, from the host.** This is the one to use for a real backup:
+
+```bash
+docker compose exec redis redis-cli BGSAVE
+docker compose cp redis:/data/appendonlydir ./backup-$(date +%F)
+```
+
+**The keyspace, from the bot.** The admin panel's "backup" button walks every key
+and dumps each value, and sends the result to the admin who asked. It is slower,
+but it needs no access to the Redis filesystem and it is a file a human can read:
 
 ```bash
 docker compose exec bot node -e "
-  const Database = require('better-sqlite3');
-  const db = new Database(process.env.DATABASE_PATH, { readonly: true });
-  db.exec(\"VACUUM INTO '/app/data/backup.db'\");
-  db.close();
+  const { RedisStore } = require('./dist/db/redis/store');
+  const store = new RedisStore({ url: process.env.REDIS_URL, prefix: process.env.REDIS_KEY_PREFIX });
+  store.snapshot('/tmp/backup.json').then(() => store.close());
 "
-docker compose cp bot:/app/data/backup.db ./backup-$(date +%F).db
+docker compose cp bot:/tmp/backup.json ./backup-$(date +%F).json
 ```
 
-A consistent copy can be taken while the bot is running, because `VACUUM INTO`
-only reads. The `bot-data` volume can be backed up directly as well, but
-restoring it requires stopping the container.
+That file restores with `RESTORE <key> 0 <base64-decoded value>`, one line per key,
+because the values are Redis' own serialised form.
 
 ---
 
@@ -376,16 +393,29 @@ npm run lint         # ESLint
 npm run format       # Prettier
 ```
 
-For local runs, point `DATABASE_PATH` at a local path (the default is
-`./data/bot.db`) and set `LOG_PRETTY=true` for readable logs.
+A Redis is required: for development to run the bot, and for the test suite to
+pass. The compose file's service is the easiest one to borrow:
+
+```bash
+docker compose up -d redis
+```
+
+The suite talks to a real server, because the repositories are Redis commands and
+Lua scripts rather than a query language — a mock would only be testing the mock.
+It runs against `redis://127.0.0.1:6379` by default and takes `TEST_REDIS_URL` to
+point somewhere else. Each test writes under its own random key prefix, so two
+test files running side by side cannot delete each other's data.
+
+For local runs, set `REDIS_URL` if your Redis is not on the default port, and set
+`LOG_PRETTY=true` for readable logs.
 
 ### Testing
 
-The suite runs on Vitest, and every test builds its own in-memory database, so no
-test can affect another. Both time and the network are simulated: no test
-connects to Samad or to Telegram.
+The suite runs on Vitest. Each test writes under its own key prefix on a real
+Redis, so no test can affect another and none of them flushes a shared database.
+Both time and the network are simulated: no test connects to Samad or to Telegram.
 
-Coverage: encryption, migrations and repositories, Samad response translation,
+Coverage: encryption, the keyspace and repositories, Samad response translation,
 token lifetime, auto-reserve, the forget-code pool, the Persian copy helpers, the
 health server and button payload encoding.
 

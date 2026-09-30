@@ -1,7 +1,11 @@
 import { expect, vi } from 'vitest';
-import type { SqliteDatabase } from '../src/db/database';
-import { openDatabase } from '../src/db/database';
-import { migrate } from '../src/db/migrations';
+import { RedisChatbotRepository } from '../src/db/redis/chatbot.repository';
+import { RedisForgetCodeReportRepository, RedisForgetCodeRepository } from '../src/db/redis/forget-code.repository';
+import { RedisFeatureRepository, RedisSettingsRepository } from '../src/db/redis/keyvalue.repository';
+import { RedisStore, scanKeys } from '../src/db/redis/store';
+import { RedisSupportRepository } from '../src/db/redis/support.repository';
+import { RedisSystemProbe } from '../src/db/redis/system.probe';
+import { RedisUserRepository } from '../src/db/redis/user.repository';
 import type {
   IssuedForgetCode,
   MealOption,
@@ -30,11 +34,72 @@ export const TEST_NOW_ISO = '2026-09-20T06:00:00Z';
 /** An hour after {@link TEST_NOW_ISO}. */
 export const TEST_SESSION_EXPIRY_ISO = '2026-09-20T07:00:00Z';
 
-/** A migrated in-memory database. Each call gets its own, so tests cannot leak into each other. */
-export function createTestDatabase(): SqliteDatabase {
-  const db = openDatabase({ path: ':memory:' });
-  migrate(db);
-  return db;
+/**
+ * The Redis the suite runs against.
+ *
+ * Overridable so a developer can point the tests at a container on a different
+ * port; the default is the conventional one.
+ */
+function testRedisUrl(): string {
+  return process.env.TEST_REDIS_URL ?? 'redis://127.0.0.1:6379';
+}
+
+let storeCounter = 0;
+
+export interface TestStores {
+  store: RedisStore;
+  users: RedisUserRepository;
+  forgetCodes: RedisForgetCodeRepository;
+  forgetCodeReports: RedisForgetCodeReportRepository;
+  support: RedisSupportRepository;
+  chatbot: RedisChatbotRepository;
+  features: RedisFeatureRepository;
+  settings: RedisSettingsRepository;
+  system: RedisSystemProbe;
+  /** Removes every key this test wrote, and nothing else. */
+  cleanup: () => Promise<void>;
+}
+
+/**
+ * A private slice of Redis for one test.
+ *
+ * Each call takes its own key prefix rather than flushing the database, so two
+ * test files running side by side cannot delete each other's data — which a
+ * `FLUSHDB` in a `beforeEach` would do on every run. The prefix carries a random
+ * component as well as a counter, because two files sharing a process would
+ * otherwise both start counting at one.
+ */
+export function createTestStores(): TestStores {
+  storeCounter += 1;
+
+  const prefix = `drb-test:${process.pid}:${storeCounter}:${Math.random().toString(36).slice(2, 8)}:`;
+  const store = new RedisStore({ url: testRedisUrl(), prefix });
+  const client = store.client;
+
+  return {
+    store,
+    users: new RedisUserRepository(store, client),
+    forgetCodes: new RedisForgetCodeRepository(store, client),
+    forgetCodeReports: new RedisForgetCodeReportRepository(store, client),
+    support: new RedisSupportRepository(store, client),
+    chatbot: new RedisChatbotRepository(store, client),
+    features: new RedisFeatureRepository(store, client),
+    settings: new RedisSettingsRepository(store, client),
+    system: new RedisSystemProbe(store, client),
+    cleanup: async () => {
+      const keys = await scanKeys(client, `${prefix}*`);
+
+      for (let start = 0; start < keys.length; start += 500) {
+        const batch = keys.slice(start, start + 500);
+
+        if (batch.length > 0) {
+          await client.del(...batch);
+        }
+      }
+
+      await store.close();
+    },
+  };
 }
 
 /** A clock frozen at an instant, so date-dependent logic is deterministic. */

@@ -1,19 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SqliteUserRepository } from '../src/db/user.repository';
-import type { SqliteDatabase } from '../src/db/database';
-import { createTestDatabase, makeUser } from './helpers';
+import { type TestStores, makeUser, createTestStores } from './helpers';
 
-describe('SqliteUserRepository', () => {
-  let db: SqliteDatabase;
-  let users: SqliteUserRepository;
+describe('RedisUserRepository', () => {
+  let stores: TestStores;
+  let users: TestStores['users'];
 
   beforeEach(() => {
-    db = createTestDatabase();
-    users = new SqliteUserRepository(db);
+    stores = createTestStores();
+    users = stores.users;
   });
 
-  afterEach(() => {
-    db.close();
+  afterEach(async () => {
+    await stores.cleanup();
   });
 
   it('stores a user and reads it back', async () => {
@@ -79,9 +77,7 @@ describe('SqliteUserRepository', () => {
     await users.deleteByTelegramId(555);
 
     expect(await users.findByTelegramId(555)).toBeNull();
-
-    const remaining = db.prepare('SELECT COUNT(*) AS total FROM user_auto_reserve_weekdays').get() as { total: number };
-    expect(remaining.total).toBe(0);
+    expect(await stores.store.client.smembers(stores.store.userWeekdays(555))).toEqual([]);
   });
 
   it('lists only users with auto-reserve switched on', async () => {

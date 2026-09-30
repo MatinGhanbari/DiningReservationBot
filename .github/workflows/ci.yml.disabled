@@ -30,7 +30,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '24'
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
@@ -130,6 +130,22 @@ jobs:
     name: Typecheck, lint and test
     runs-on: ubuntu-latest
     needs: hygiene
+
+    # The storage layer is Redis commands and Lua scripts, so the suite needs a
+    # real server rather than a mock — a fake would only be testing the fake.
+    # A fresh container per run is also what keeps one test from inheriting
+    # another's keys.
+    services:
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 

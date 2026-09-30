@@ -17,7 +17,12 @@ process.env.ADMINS = '[1001,1002]';
 // developer whose own `.env` carries the real Samad credential would otherwise
 // change what `tests/samad.test.ts` observes.
 process.env.SAMAD_BASIC_AUTH = '';
-process.env.DATABASE_PATH = ':memory:';
+/**
+ * The suite talks to a real Redis, because the repositories are scripts and
+ * commands rather than a query language — a fake would only be testing the fake.
+ * `TEST_REDIS_URL` lets a developer point it at a container on another port.
+ */
+process.env.TEST_REDIS_URL = process.env.TEST_REDIS_URL ?? 'redis://127.0.0.1:6379';
 process.env.LOG_LEVEL = 'silent';
 process.env.TZ = 'Asia/Tehran';
 process.env.PORT = '0';

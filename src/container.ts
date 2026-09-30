@@ -17,15 +17,13 @@ import { MemorySessionStore } from './cache/session.store';
 import { config, isChatbotEnabled } from './config/env';
 import { copy } from './copy/fa';
 import { AesSecretBox } from './crypto/secret-box';
-import { SqliteChatbotRepository } from './db/chatbot.repository';
-import { SqliteForgetCodeReportRepository, SqliteForgetCodeRepository } from './db/forget-code.repository';
-import { closeDatabase, openDatabase, type SqliteDatabase } from './db/database';
-import { SqliteFeatureRepository } from './db/feature.repository';
-import { SqliteSystemProbe } from './db/maintenance';
-import { migrate } from './db/migrations';
-import { SqliteSupportRepository } from './db/support.repository';
-import { SqliteSettingsRepository } from './db/settings.repository';
-import { SqliteUserRepository } from './db/user.repository';
+import { RedisChatbotRepository } from './db/redis/chatbot.repository';
+import { RedisForgetCodeReportRepository, RedisForgetCodeRepository } from './db/redis/forget-code.repository';
+import { RedisFeatureRepository, RedisSettingsRepository } from './db/redis/keyvalue.repository';
+import { RedisStore } from './db/redis/store';
+import { RedisSupportRepository } from './db/redis/support.repository';
+import { RedisSystemProbe } from './db/redis/system.probe';
+import { RedisUserRepository } from './db/redis/user.repository';
 import { HealthServer, type HealthReport } from './http/health';
 import { SamadHttpClient } from './samad/client';
 import { SamadApiGateway } from './samad/gateway';
@@ -49,7 +47,7 @@ const log = scopedLogger('container');
 const UPDATE_DRAIN_MS = 3 * SECOND;
 
 export interface Container {
-  db: SqliteDatabase;
+  store: RedisStore;
   bot: TelegramBot;
   scheduler: Scheduler;
   health: HealthServer;
@@ -74,20 +72,20 @@ export interface Container {
 export function createContainer(): Container {
   // ── Infrastructure ────────────────────────────────────────────────────────
 
-  const db = openDatabase();
-  migrate(db);
+  const store = new RedisStore({ url: config.REDIS_URL, prefix: config.REDIS_KEY_PREFIX });
+  const redis = store.client;
 
   const clock = new SystemClock();
   const secretBox = new AesSecretBox(config.ENCRYPTION_KEY);
 
-  const users = new SqliteUserRepository(db);
-  const forgetCodes = new SqliteForgetCodeRepository(db);
-  const forgetCodeReports = new SqliteForgetCodeReportRepository(db);
-  const supportTickets = new SqliteSupportRepository(db);
-  const chatbotMessages = new SqliteChatbotRepository(db);
-  const featureFlags = new SqliteFeatureRepository(db);
-  const settings = new SqliteSettingsRepository(db);
-  const system = new SqliteSystemProbe(db, config.DATABASE_PATH);
+  const users = new RedisUserRepository(store, redis);
+  const forgetCodes = new RedisForgetCodeRepository(store, redis);
+  const forgetCodeReports = new RedisForgetCodeReportRepository(store, redis);
+  const supportTickets = new RedisSupportRepository(store, redis);
+  const chatbotMessages = new RedisChatbotRepository(store, redis);
+  const featureFlags = new RedisFeatureRepository(store, redis);
+  const settings = new RedisSettingsRepository(store, redis);
+  const system = new RedisSystemProbe(store, redis);
 
   const sessions = new MemorySessionStore(clock);
   const conversations = new MemoryConversationStore(clock);
@@ -175,8 +173,8 @@ export function createContainer(): Container {
     // container needs exactly one port open to the outside world.
     webhook: bot.webhook ?? undefined,
     check: async (): Promise<HealthReport> => {
-      // A real query, not just "is the handle open": a database whose file was
-      // removed underneath the process is still open and still useless.
+      // A real query, not just "is the socket open": a connection to a Redis that
+      // has been flushed or replaced is still open and still useless.
       const userCount = await users.count();
 
       return {
@@ -278,10 +276,10 @@ export function createContainer(): Container {
     // at ten.
     await bot.webhook?.drain(UPDATE_DRAIN_MS);
 
-    closeDatabase(db);
+    await store.close();
 
     log.info('shutdown complete');
   };
 
-  return { db, bot, scheduler, health, start, shutdown };
+  return { store, bot, scheduler, health, start, shutdown };
 }

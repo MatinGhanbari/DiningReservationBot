@@ -1,6 +1,6 @@
 # 2. In-memory cache instead of Redis
 
-- **Status:** Accepted
+- **Status:** Accepted for the cache; see [9](0009-redis-for-all-storage.md) for the store
 - **Date:** 2026 (1405 AP)
 
 ## Context
@@ -54,3 +54,16 @@ keeping state in Redis solved.
 If more than one replica is ever needed, `SessionStore` and `ConversationStore`
 move to a shared service first. Both are ports, so the only place that has to
 change is `container.ts`.
+
+## Update (2026-09-30)
+
+Half of this record still holds and half does not.
+
+**Still holds:** sessions and conversation state stay in process memory. The
+"revisit when" condition below is unchanged — a second replica is still what would
+force them out, and Redis is now already running, so that move is cheaper than it
+was.
+
+**Does not hold:** the decision was framed as "one less dependency and one less
+service to install and monitor". Redis is now required, because the data lives
+there. See [ADR 9](0009-redis-for-all-storage.md).

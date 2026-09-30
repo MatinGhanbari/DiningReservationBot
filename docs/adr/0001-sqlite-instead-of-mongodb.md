@@ -1,6 +1,6 @@
 # 1. SQLite with WAL instead of MongoDB
 
-- **Status:** Accepted
+- **Status:** Superseded by [9](0009-redis-for-all-storage.md)
 - **Date:** 2026 (1405 AP)
 
 ## Context
@@ -58,3 +58,14 @@ in-memory cache costs effectively nothing.
 
 - The previous MongoDB data was not migrated. A migration would have been
   required, but since every user can sign in again, it was not justified.
+
+## Update (2026-09-30)
+
+Superseded by [ADR 9](0009-redis-for-all-storage.md). Every store moved to Redis;
+SQLite, its migrations and `better-sqlite3` are gone.
+
+The reasoning in this record was not wrong, and it was measured before being
+overridden: the hot path was 6–60 µs and a loopback Redis round trip has a floor of
+84 µs, so the move makes storage 10–30× slower rather than faster. The decision was
+taken anyway, for durability and operational reasons, with that cost stated. The
+measurements are in ADR 9 — read them before proposing a move back.

@@ -232,15 +232,15 @@ export class AdminService {
   }
 
   /**
-   * Writes a consistent database snapshot to a temporary file and sends it to
-   * the admin who asked.
+   * Writes a consistent snapshot of every key to a temporary file and sends it
+   * to the admin who asked.
    *
    * The file is removed in a `finally`, so a failed upload does not leave copies
-   * of the database lying around in the container.
+   * of the data lying around in the container.
    */
   async sendBackup(adminTelegramId: number, caption: string): Promise<{ sizeBytes: number; users: number }> {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const path = join(tmpdir(), `bot-backup-${stamp}.db`);
+    const path = join(tmpdir(), `bot-backup-${stamp}.json`);
 
     try {
       const sizeBytes = await this.system.snapshot(path);

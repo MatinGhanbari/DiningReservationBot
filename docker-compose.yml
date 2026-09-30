@@ -1,12 +1,17 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #  Dining reservation bot — single-server deployment
 #
-#  Why one container and not several: conversation state and sessions are held
-#  in this process's memory, and the auto-reserve scheduler runs inside the same
-#  process. With two replicas up, a user is lost mid-wizard depending on which
-#  container their message reaches, and both replicas run auto-reserve at the
-#  same time. Scaling horizontally here means moving the cache to a shared
-#  service.
+#  Two containers: the bot, and the Redis it keeps everything in. Redis is not
+#  published to the host, so the only way to reach it is from inside this compose
+#  network — which is also why it needs no password here. If it ever has to be
+#  reachable from elsewhere, set one and put it in REDIS_URL in `.env`.
+#
+#  Why the bot is still one container and not several: conversation state and
+#  sessions are held in this process's memory, and the auto-reserve scheduler
+#  runs inside the same process. With two replicas up, a user is lost mid-wizard
+#  depending on which container their message reaches, and both replicas run
+#  auto-reserve at the same time. Scaling horizontally means moving those two
+#  caches to Redis as well — see docs/adr/0002.
 #
 #  Getting started:
 #      cp .env.example .env      # and fill in the values
@@ -16,6 +21,59 @@
 name: dining-reservation-bot
 
 services:
+  redis:
+    image: redis:8-alpine
+
+    # Append-only persistence, flushed once a second.
+    #
+    # This is what makes the data survive a restart, and it is the reason the
+    # volume below exists. Without it Redis is a cache: a crash or an image
+    # upgrade silently discards every account, ticket and transcript. `everysec`
+    # is the documented default and the right trade here — at most one second of
+    # writes is lost, and no write pays for an fsync.
+    #
+    # The RDB snapshots are switched off so there is exactly one file to reason
+    # about and one thing to restore.
+    command:
+      - redis-server
+      - --appendonly
+      - 'yes'
+      - --appendfsync
+      - everysec
+      - --save
+      - ''
+
+    volumes:
+      # The whole dataset. Losing this volume means every user has to sign in
+      # again, and every support conversation is gone.
+      - redis-data:/data
+
+    # No `ports:` on purpose. Nothing outside this compose network can reach
+    # Redis, so it cannot be read or wiped by anything on the host or the LAN.
+    restart: unless-stopped
+
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
   dining-reservation-bot:
     container_name: zeeabad5-8b25-4a7d-8ed1-f3f1516aaed6
     build:
@@ -31,17 +89,24 @@ services:
       - .env
 
     # These take precedence over the values in .env, because in a Docker
-    # deployment the database path has to be on the volume rather than in the
-    # project's relative directory.
+    # deployment the service names are what resolve, and the catalog directory
+    # has to be on the volume rather than in the project's relative directory.
     environment:
       NODE_ENV: production
-      DATABASE_PATH: /app/data/bot.db
+      REDIS_URL: redis://redis:6379
+      DATA_DIR: /app/data
       TZ: ${TZ:-Asia/Tehran}
 
     volumes:
-      # The only data that has to outlive the container: the SQLite file and the
-      # WAL beside it. Losing this volume means every user has to sign in again.
+      # Only the operator-editable text catalog lives here. The data itself is in
+      # Redis, which keeps its own volume above.
       - bot-data:/app/data
+
+    # The bot is useless without Redis and would spend its start-up retrying, so
+    # wait for the server to answer before starting it.
+    depends_on:
+      redis:
+        condition: service_healthy
 
     ports:
       # The health server — and, in webhook mode, the delivery of Telegram
@@ -100,4 +165,7 @@ services:
 
 volumes:
   bot-data:
+    driver: local
+  # Everything the bot knows. This is the volume that matters: back it up.
+  redis-data:
     driver: local
