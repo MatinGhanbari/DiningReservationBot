@@ -2,13 +2,16 @@ import type { Context, MiddlewareFn, Telegraf } from 'telegraf';
 import { isAdmin } from '../../config/env';
 import { copy } from '../../copy/fa';
 import { UNIVERSITIES, findUniversityById } from '../../domain/universities';
+import { scopedLogger } from '../../shared/logger';
 import { messageTextOf, requireFeature, requireLogin, telegramIdOf } from '../guards';
 import { BTN, backMenu, isMenuButton, loginMenu, mainMenu, universityPicker } from '../keyboards';
-import { handler, replyHtml, tryReplyHtml, withTyping } from '../reply';
+import { handler, replyHtml, replyPhotoHtml, tryReplyHtml, withTyping } from '../reply';
 import type { BotServices } from '../services';
 import type { ConversationState } from '../state';
 import { handleAdminUserQuery, handleBroadcastText } from './admin.handler';
 import { askChatbot, relayToAdmins } from './support.handler';
+
+const log = scopedLogger('bot');
 
 /**
  * Starting the bot, the login wizard, and the profile screen.
@@ -68,6 +71,28 @@ async function onLogout(ctx: Context, services: BotServices): Promise<void> {
   await replyHtml(ctx, copy.start.loggedOut(), loginMenu());
 }
 
+/**
+ * The user's current Telegram profile photo, largest size, or null when there
+ * is none.
+ *
+ * Someone who never set a photo — or who hides it in their privacy settings —
+ * gets an empty list rather than an error, so the caller has to handle the
+ * missing case either way. A failed lookup is reported the same way, because
+ * losing the picture is not worth losing the screen over.
+ */
+async function profilePhotoFileId(ctx: Context, telegramId: number): Promise<string | null> {
+  try {
+    const { photos } = await ctx.telegram.getUserProfilePhotos(telegramId, 0, 1);
+    const sizes = photos[0];
+
+    // Telegram orders the sizes smallest first, so the last one is the largest.
+    return sizes?.[sizes.length - 1]?.file_id ?? null;
+  } catch (error) {
+    log.debug({ err: error, telegramId }, 'could not read the profile photo');
+    return null;
+  }
+}
+
 async function onMyInfo(ctx: Context, services: BotServices): Promise<void> {
   if (!(await requireFeature(ctx, services, 'profile', backMenu()))) {
     return;
@@ -88,17 +113,22 @@ async function onMyInfo(ctx: Context, services: BotServices): Promise<void> {
 
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
 
-  await replyHtml(
-    ctx,
-    copy.profile.view({
-      fullName,
-      universityName,
-      samadUsername: profile.samadUsername,
-      creditRial: profile.creditRial,
-      telegramId: guard.telegramId,
-    }),
-    backMenu(),
-  );
+  const html = copy.profile.view({
+    fullName,
+    universityName,
+    samadUsername: profile.samadUsername,
+    creditRial: profile.creditRial,
+    telegramId: guard.telegramId,
+  });
+
+  const photoFileId = await profilePhotoFileId(ctx, guard.telegramId);
+
+  if (photoFileId === null) {
+    await replyHtml(ctx, html, backMenu());
+    return;
+  }
+
+  await replyPhotoHtml(ctx, photoFileId, html, backMenu());
 }
 
 /** Handles the university button and moves the wizard to the username step. */

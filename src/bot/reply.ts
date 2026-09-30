@@ -35,6 +35,21 @@ export async function replyHtml(ctx: Context, html: string, extra?: ExtraReplyMe
   await ctx.reply(html, { parse_mode: 'HTML', ...extra });
 }
 
+/**
+ * Sends a photo with the same HTML caption and keyboard a text reply would carry.
+ *
+ * Screens that put their content in a caption go through here rather than
+ * calling Telegram directly, so they inherit the typing indicator like every
+ * other reply.
+ *
+ * Telegram caps a caption at 1024 characters — a quarter of the 4096 a message
+ * gets — so this is for the short screens, not for anything built out of a list.
+ */
+export async function replyPhotoHtml(ctx: Context, photo: string, caption: string, extra?: ExtraReplyMessage): Promise<void> {
+  await sendTyping(ctx);
+  await ctx.replyWithPhoto(photo, { parse_mode: 'HTML', caption, ...extra });
+}
+
 /** Sends a message and swallows transport failures, for best-effort notices. */
 export async function tryReplyHtml(ctx: Context, html: string, extra?: ExtraReplyMessage): Promise<void> {
   try {
