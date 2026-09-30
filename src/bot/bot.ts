@@ -13,6 +13,7 @@ import {
   onScheduleEdit,
   onScheduleList,
   onScheduleReset,
+  onScheduleRun,
   onScheduleStep,
   onShowUser,
   onToggleFeature,
@@ -238,6 +239,9 @@ export class TelegramBot {
         return;
       case 'admin-schedule-reset':
         await onScheduleReset(ctx, services, action.job);
+        return;
+      case 'admin-schedule-run':
+        await onScheduleRun(ctx, services, action.job);
         return;
       case 'admin-purge':
         await onPurge(ctx, services);

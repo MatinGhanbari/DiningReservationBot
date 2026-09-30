@@ -241,6 +241,9 @@
       "schedulePickHint": "برای تنظیم ساعت هر کار، روی اسمش بزن.",
       "schedulePickLabel": "{name} · {time}",
       "scheduleNotEditable": "زمان این کار از پنل تنظیم نمی‌شه؛ چون به‌جای یک ساعت مشخص، دوره‌ای اجرا می‌شه.",
+      "scheduleRunStarted": "⏳ <b>{name}</b> شروع شد. نتیجه‌اش رو همین‌جا می‌گم.",
+      "scheduleRunDone": "✅ <b>{name}</b> با موفقیت اجرا شد.",
+      "scheduleRunFailedTitle": "⚠️ اجرای <b>{name}</b> با خطا تموم شد",
       "scheduleEditTitle": "⏰ <b>تنظیم زمان: {name}</b>",
       "scheduleEditNextLine": "اجرای بعدی: <b>{next}</b>",
       "scheduleEditCountdownLine": "⏳ <b>{countdown}</b> دیگه",
@@ -362,7 +365,8 @@
       "scheduleDown": "⬇️",
       "scheduleReset": "♻️ پیش‌فرض",
       "scheduleBack": "‹ برگشت",
-      "ticketCloseTemplate": "🔒 #{ticketId} · {displayName}"
+      "ticketCloseTemplate": "🔒 #{ticketId} · {displayName}",
+      "scheduleRun": "▶️ همین حالا اجرا کن"
     }
   }
 }

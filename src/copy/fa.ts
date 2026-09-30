@@ -502,6 +502,12 @@ export const copy = {
 
     scheduleNotEditable: (): string => t('admin.scheduleNotEditable'),
 
+    scheduleRunStarted: (name: string): string => t('admin.scheduleRunStarted', { name }),
+
+    scheduleRunDone: (name: string): string => t('admin.scheduleRunDone', { name }),
+
+    scheduleRunFailed: (name: string, reason: string): string => blocks(t('admin.scheduleRunFailedTitle', { name }), escapeHtml(reason)),
+
     /**
      * The stepper screen. The countdown leads, because "how long until this
      * runs?" is the question the whole screen is there to answer.

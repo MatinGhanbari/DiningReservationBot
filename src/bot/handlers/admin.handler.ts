@@ -1,5 +1,5 @@
 import type { Context, Telegraf } from 'telegraf';
-import type { ExtraReplyMessage } from 'telegraf/typings/telegram-types';
+import type { ExtraEditMessageText } from 'telegraf/typings/telegram-types';
 import { config } from '../../config/env';
 import { copy } from '../../copy/fa';
 import type { FeatureKey } from '../../domain/features';
@@ -472,8 +472,14 @@ function editableJobOf(services: BotServices, name: string): EditableJob | null 
   return { ...job, hour: job.hour, minute: job.minute };
 }
 
-/** The schedule report, plus the picker that leads to each job's stepper. */
-function scheduleScreen(services: BotServices): { text: string; extra: ExtraReplyMessage } {
+/**
+ * The schedule report, plus the picker that leads to each job's stepper.
+ *
+ * The keyboard is always inline, even when there is nothing to pick: the same
+ * value is handed to `editMessageText` on the way back from a button, and that
+ * call accepts an inline keyboard and nothing else.
+ */
+function scheduleScreen(services: BotServices): { text: string; extra: ExtraEditMessageText } {
   const now = services.clock.now();
   const jobs = services.admin.schedule();
 
@@ -495,15 +501,12 @@ function scheduleScreen(services: BotServices): { text: string; extra: ExtraRepl
       timezone: config.TZ,
       pickHint: editable.length === 0 ? null : copy.admin.schedulePickHint(),
     }),
-    extra:
-      editable.length === 0
-        ? adminSubMenu()
-        : schedulePicker(
-            editable.map(job => ({
-              name: job.name,
-              label: copy.admin.schedulePickLabel(copy.admin.scheduleJobName(job.name), clockLabel(job.hour, job.minute)),
-            })),
-          ),
+    extra: schedulePicker(
+      editable.map(job => ({
+        name: job.name,
+        label: copy.admin.schedulePickLabel(copy.admin.scheduleJobName(job.name), clockLabel(job.hour, job.minute)),
+      })),
+    ),
   };
 }
 
@@ -545,12 +548,7 @@ async function renderScheduleEditor(ctx: Context, services: BotServices, job: Ed
  * button: an inline keyboard from an earlier deployment is still tappable, and a
  * job that runs on a step has no clock time to nudge.
  */
-async function withEditableJob(
-  ctx: Context,
-  services: BotServices,
-  jobName: string,
-  action: (() => Promise<void>) | null,
-): Promise<void> {
+async function withEditableJob(ctx: Context, services: BotServices, jobName: string, action: (() => Promise<void>) | null): Promise<void> {
   if ((await requireAdmin(ctx)) === null) {
     return;
   }
@@ -597,13 +595,7 @@ async function onScheduleEdit(ctx: Context, services: BotServices, jobName: stri
   await withEditableJob(ctx, services, jobName, null);
 }
 
-async function onScheduleStep(
-  ctx: Context,
-  services: BotServices,
-  jobName: string,
-  field: ScheduleField,
-  delta: number,
-): Promise<void> {
+async function onScheduleStep(ctx: Context, services: BotServices, jobName: string, field: ScheduleField, delta: number): Promise<void> {
   await withEditableJob(ctx, services, jobName, async () => {
     await services.admin.stepScheduleTime(jobName, field, delta);
   });
@@ -612,6 +604,33 @@ async function onScheduleStep(
 async function onScheduleReset(ctx: Context, services: BotServices, jobName: string): Promise<void> {
   await withEditableJob(ctx, services, jobName, async () => {
     await services.admin.resetScheduleTime(jobName);
+  });
+}
+
+/**
+ * Runs one job on demand, rather than waiting for its next tick.
+ *
+ * Detached, for the same reason a broadcast is: the run walks every
+ * auto-reserve user and calls Samad per meal, so it can outlive Telegraf's
+ * 90-second handler timeout. Awaiting it would kill the update and tell the
+ * admin the run had failed while it was still going. The typing indicator is
+ * the only sign in that chat that the run is still alive.
+ */
+async function onScheduleRun(ctx: Context, services: BotServices, jobName: string): Promise<void> {
+  await withEditableJob(ctx, services, jobName, async () => {
+    const name = copy.admin.scheduleJobName(jobName);
+
+    await tryReplyHtml(ctx, copy.admin.scheduleRunStarted(name));
+
+    void withTyping(ctx, () => services.admin.runScheduleJob(jobName))
+      .then(() => tryReplyHtml(ctx, copy.admin.scheduleRunDone(name)))
+      .catch(async error => {
+        const appError = toAppError(error);
+
+        log.error({ err: error, job: jobName, code: appError.code }, 'manual schedule run failed');
+
+        await tryReplyHtml(ctx, copy.admin.scheduleRunFailed(name, appError.userMessage));
+      });
   });
 }
 
@@ -729,4 +748,5 @@ export {
   onScheduleEdit,
   onScheduleStep,
   onScheduleReset,
+  onScheduleRun,
 };

@@ -246,6 +246,9 @@ export const clockLabel = (hour: number, minute: number): string => `${clockPart
  * an inline row; tapping one re-draws the screen, which refreshes the countdown
  * above it. «پیش‌فرض» appears only once an override is stored, since before that
  * there is nothing to drop.
+ *
+ * The manual run sits on its own row at the top, because it is the one control
+ * here that does something other than change a number.
  */
 export const scheduleEditor = (input: { job: string; hour: number; minute: number; custom: boolean }) => {
   const edit = encodeCallback({ kind: 'admin-schedule-edit', job: input.job });
@@ -254,16 +257,12 @@ export const scheduleEditor = (input: { job: string; hour: number; minute: numbe
   const controls = [Markup.button.callback(t('buttons.scheduleBack'), encodeCallback({ kind: 'admin-schedule-list' }))];
 
   if (input.custom) {
-    controls.unshift(
-      Markup.button.callback(t('buttons.scheduleReset'), encodeCallback({ kind: 'admin-schedule-reset', job: input.job })),
-    );
+    controls.unshift(Markup.button.callback(t('buttons.scheduleReset'), encodeCallback({ kind: 'admin-schedule-reset', job: input.job })));
   }
 
   return Markup.inlineKeyboard([
-    [
-      Markup.button.callback(t('buttons.scheduleUp'), step('hour', 1)),
-      Markup.button.callback(t('buttons.scheduleUp'), step('minute', 1)),
-    ],
+    [Markup.button.callback(t('buttons.scheduleRun'), encodeCallback({ kind: 'admin-schedule-run', job: input.job }))],
+    [Markup.button.callback(t('buttons.scheduleUp'), step('hour', 1)), Markup.button.callback(t('buttons.scheduleUp'), step('minute', 1))],
     [Markup.button.callback(clockPart(input.hour), edit), Markup.button.callback(clockPart(input.minute), edit)],
     [
       Markup.button.callback(t('buttons.scheduleDown'), step('hour', -1)),

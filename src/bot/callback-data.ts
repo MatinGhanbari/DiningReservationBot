@@ -41,6 +41,7 @@ export type CallbackAction =
   | { kind: 'admin-schedule-edit'; job: string }
   | { kind: 'admin-schedule-step'; job: string; field: ScheduleField; delta: number }
   | { kind: 'admin-schedule-reset'; job: string }
+  | { kind: 'admin-schedule-run'; job: string }
   | { kind: 'admin-purge' };
 
 const WEEK_CODES: Record<WeekSelection, string> = { current: 'c', next: 'n' };
@@ -132,6 +133,8 @@ export function encodeCallback(action: CallbackAction): string {
       return `x:s:${FIELD_CODES[action.field]}:${action.delta > 0 ? 'u' : 'd'}:${action.job}`;
     case 'admin-schedule-reset':
       return `x:s:r:${action.job}`;
+    case 'admin-schedule-run':
+      return `x:s:n:${action.job}`;
     case 'admin-purge':
       return 'x:p:y';
   }
@@ -252,6 +255,11 @@ export function decodeCallback(data: string): CallbackAction | null {
         if (second === 'r') {
           const job = parseJobName(third);
           return job === null ? null : { kind: 'admin-schedule-reset', job };
+        }
+
+        if (second === 'n') {
+          const job = parseJobName(third);
+          return job === null ? null : { kind: 'admin-schedule-run', job };
         }
 
         // A step carries four tokens: field, direction, then the job name.

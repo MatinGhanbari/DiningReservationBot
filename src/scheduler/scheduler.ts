@@ -157,6 +157,18 @@ export class Scheduler {
     }
   }
 
+  /**
+   * Runs a registered job now, out of band.
+   *
+   * The run goes through the same path a timer tick takes, so a manual run and
+   * a scheduled one cannot behave differently. A failure is thrown rather than
+   * swallowed here: a tick has nobody to tell, an admin who pressed a button
+   * does.
+   */
+  async runNow(name: string): Promise<void> {
+    await this.execute(this.jobOrThrow(name).definition);
+  }
+
   stop(): void {
     for (const entry of this.jobs.values()) {
       entry.task.stop();
@@ -226,7 +238,9 @@ export class Scheduler {
     return cron.schedule(
       expression,
       () => {
-        void this.execute(definition);
+        // `execute` logs the failure on its way out, and a tick has no one to
+        // report it to — hence the empty catch.
+        void this.execute(definition).catch(() => undefined);
       },
       { timezone: config.TZ },
     );
@@ -242,6 +256,10 @@ export class Scheduler {
       // A failing job must never crash the process: the bot has to stay up to
       // serve the people who are still using it.
       log.error({ err: error, job: job.name }, 'scheduled job failed');
+
+      // Rethrown for the manual run, which has an admin waiting to hear whether
+      // it worked. The scheduled caller catches it again above.
+      throw error;
     }
   }
 }

@@ -140,6 +140,17 @@ export class AdminService {
     await this.scheduler.resetTime(name);
   }
 
+  /**
+   * Runs one scheduled job now instead of waiting for its next tick.
+   *
+   * The job's own function is what runs, so a manual run and a timer run cannot
+   * drift apart — and a job that is already running is dropped rather than
+   * doubled up, because that guard lives in the job, not here.
+   */
+  async runScheduleJob(name: string): Promise<void> {
+    await this.scheduler.runNow(name);
+  }
+
   /** The most recently created users, newest first. */
   async recentUsers(limit = 5): Promise<readonly User[]> {
     return this.users.list({ limit, offset: 0 });
