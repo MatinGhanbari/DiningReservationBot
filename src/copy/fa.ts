@@ -613,6 +613,11 @@ export const copy = {
     notConfigured: (): string => t('samad.notConfigured'),
   },
 
+  /** The notice an admin gets when a deployment comes up. */
+  startup: {
+    running: (input: { env: string; startedAt: string }): string => t('startup.running', { env: input.env, startedAt: input.startedAt }),
+  },
+
   errors: {
     generic: (): string => t('errors.generic'),
 

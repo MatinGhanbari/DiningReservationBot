@@ -15,6 +15,7 @@ import type { BotServices } from './bot/services';
 import { MemoryConversationStore } from './bot/state';
 import { MemorySessionStore } from './cache/session.store';
 import { config, isChatbotEnabled } from './config/env';
+import { copy } from './copy/fa';
 import { AesSecretBox } from './crypto/secret-box';
 import { SqliteChatbotRepository } from './db/chatbot.repository';
 import { SqliteForgetCodeReportRepository, SqliteForgetCodeRepository } from './db/forget-code.repository';
@@ -30,6 +31,7 @@ import { SamadApiGateway } from './samad/gateway';
 import { Scheduler, type ScheduledJob } from './scheduler/scheduler';
 import { SystemClock } from './shared/clock';
 import { scopedLogger } from './shared/logger';
+import { formatJalaliDateTime } from './shared/persian';
 import { OpenRouterAssistant } from './support/openrouter.client';
 
 const log = scopedLogger('container');
@@ -210,6 +212,19 @@ export function createContainer(): Container {
   let shuttingDown = false;
 
   /**
+   * Tells the admins the deployment came up.
+   *
+   * Every failure is swallowed on purpose: an admin who blocked the bot, or a
+   * Telegram outage at boot, must not turn a working deployment into a crash
+   * loop. `send` already logs what went wrong.
+   */
+  const announceStartup = async (): Promise<void> => {
+    const text = copy.startup.running({ env: config.NODE_ENV, startedAt: formatJalaliDateTime(clock.now()) });
+
+    await Promise.all(config.ADMINS.map(adminId => notifier.send(adminId, text)));
+  };
+
+  /**
    * Brings the process up in dependency order.
    *
    * Health first, so the container reports itself as starting rather than
@@ -220,6 +235,7 @@ export function createContainer(): Container {
     await health.start();
     await bot.start();
     scheduler.start(jobs);
+    await announceStartup();
 
     log.info({ env: config.NODE_ENV, port: config.PORT, chatbot: isChatbotEnabled, admins: config.ADMINS.length }, 'application started');
   };
