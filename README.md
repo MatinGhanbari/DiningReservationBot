@@ -132,6 +132,7 @@ Telegram message
 cp .env.example .env
 # Fill in BOT_TOKEN, ADMINS and ENCRYPTION_KEY
 openssl rand -hex 48          # a value for ENCRYPTION_KEY
+openssl rand -hex 32          # a value for REDIS_PASSWORD
 
 docker compose up -d --build
 docker compose logs -f bot
@@ -159,7 +160,8 @@ matter most:
 | `ADMINS` | — | **Required.** JSON array of numeric admin ids |
 | `ENCRYPTION_KEY` | — | **Required.** At least 64 characters; encrypts the stored refresh tokens |
 | `SAMAD_BASIC_AUTH` | empty | Samad client credential, `Basic <base64>`. Empty makes the Samad login fail with `401` |
-| `REDIS_URL` | `redis://127.0.0.1:6379` | The Redis holding all of the data |
+| `REDIS_PASSWORD` | — | **Required by the compose file.** The Redis password. Compose feeds it to `redis-server --requirepass` *and* to the bot's `REDIS_URL`, so the two cannot drift. Generate with `openssl rand -hex 32` |
+| `REDIS_URL` | `redis://127.0.0.1:6379` | The Redis holding all of the data. Carry the password in the URL — `redis://:<password>@host:port` — and use `rediss://` for TLS |
 | `REDIS_KEY_PREFIX` | `drb:` | Namespace for every key, if the Redis is shared |
 | `DATA_DIR` | `./data` | Directory holding the operator-editable text catalog |
 | `TELEGRAM_WEBHOOK_URL` | empty | Public HTTPS webhook address. Empty means long polling |
@@ -362,6 +364,10 @@ docker compose exec redis redis-cli BGSAVE
 docker compose cp redis:/data/appendonlydir ./backup-$(date +%F)
 ```
 
+`redis-cli` authenticates on its own: the compose file sets `REDISCLI_AUTH` on the
+`redis` service from `REDIS_PASSWORD`, so no command above needs an `-a` flag and
+the password never appears in an argument list or a shell history.
+
 **The keyspace, from the bot.** The admin panel's "backup" button walks every key
 and dumps each value, and sends the result to the admin who asked. It is slower,
 but it needs no access to the Redis filesystem and it is a file a human can read:
@@ -407,7 +413,11 @@ point somewhere else. Each test writes under its own random key prefix, so two
 test files running side by side cannot delete each other's data.
 
 For local runs, set `REDIS_URL` if your Redis is not on the default port, and set
-`LOG_PRETTY=true` for readable logs.
+`LOG_PRETTY=true` for readable logs. If that Redis asks for a password, carry it in
+the URL — `redis://:<password>@127.0.0.1:6379` — and point the suite at the same
+place with `TEST_REDIS_URL`, which defaults to `redis://127.0.0.1:6379` and knows
+nothing about `REDIS_PASSWORD`. The compose service is password-protected and not
+published to the host, so a test run cannot borrow it as-is.
 
 ### Testing
 
@@ -443,6 +453,11 @@ health server and button payload encoding.
 - **Secrets** are read from the environment only. `appsettings.json` is tracked
   by git and therefore holds no credential — a value committed once stays
   readable in the history even after it is deleted from the file.
+- **Redis** requires a password, even though the compose file publishes no port
+  for it. A password is the difference between "reachable from the compose
+  network" and "readable and wipeable by anything that reaches that network",
+  and the whole dataset lives there. `REDIS_PASSWORD` reaches the server through
+  `--requirepass` and the bot through `REDIS_URL`, from one value.
 - **The container** runs as a non-root user, with a read-only filesystem and
   `no-new-privileges`.
 - **The support chatbot** is constrained twice over: the system prompt forbids
