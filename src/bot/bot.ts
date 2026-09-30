@@ -287,10 +287,10 @@ export class TelegramBot {
     // API rejects stops the process instead of the first message.
     this.bot.botInfo = await this.bot.telegram.getMe();
 
-    // await this.bot.telegram.setWebhook(webhookUrl, {
-    //   drop_pending_updates: true,
-    //   ...(config.TELEGRAM_WEBHOOK_SECRET.length === 0 ? {} : { secret_token: config.TELEGRAM_WEBHOOK_SECRET }),
-    // });
+    await this.bot.telegram.setWebhook(webhookUrl, {
+      drop_pending_updates: true,
+      ...(config.TELEGRAM_WEBHOOK_SECRET.length === 0 ? {} : { secret_token: config.TELEGRAM_WEBHOOK_SECRET }),
+    });
 
     log.info({ url: webhookUrl, path: webhook.path }, 'bot is receiving updates over the webhook');
   }
