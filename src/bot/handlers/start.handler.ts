@@ -5,7 +5,7 @@ import { UNIVERSITIES, findUniversityById } from '../../domain/universities';
 import { scopedLogger } from '../../shared/logger';
 import { messageTextOf, requireFeature, requireLogin, telegramIdOf } from '../guards';
 import { BTN, backMenu, isMenuButton, loginMenu, mainMenu, universityPicker } from '../keyboards';
-import { handler, replyHtml, replyPhotoHtml, tryReplyHtml, withTyping } from '../reply';
+import { handler, replyHtml, replyPhotoHtml, reportFailure, tryReplyHtml, withTyping } from '../reply';
 import type { BotServices } from '../services';
 import type { ConversationState } from '../state';
 import { handleAdminUserQuery, handleBroadcastText } from './admin.handler';
@@ -157,6 +157,12 @@ export async function handleUniversitySelection(ctx: Context, services: BotServi
  * Without that ordering, someone typing their password as «خروج» (logout)
  * themselves out instead. When no flow is active it passes the update straight
  * through, so the menu keeps working.
+ *
+ * It translates its own failures rather than rethrowing. It cannot use
+ * `handler()`, because that is terminal and this has to fall through — so
+ * without the explicit `reportFailure` a failed login reached `bot.catch`, which
+ * logged `unhandled bot error` and sent the generic failure instead of the
+ * specific «الان نتوانستم به سماد وصل شوم…» that `toAppError` carries.
  */
 export function createTextWizard(services: BotServices): MiddlewareFn<Context> {
   return async (ctx, next) => {
@@ -189,7 +195,7 @@ export function createTextWizard(services: BotServices): MiddlewareFn<Context> {
       await advance(ctx, services, telegramId, state, text);
     } catch (error) {
       await services.conversations.clear(telegramId);
-      throw error;
+      await reportFailure('wizard', ctx, error);
     }
   };
 }

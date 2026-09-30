@@ -13,27 +13,52 @@ type TelegramClient = Telegraf['telegram'];
  */
 type LooseCallApi = (method: string, payload: Record<string, unknown>, options?: { signal?: AbortSignal }) => Promise<unknown>;
 
+/** Marks a client class whose `callApi` is already traced, so a second bot cannot double-log. */
+const TRACED = Symbol('traced telegram client');
+
+/** The slice of the client class this module patches. */
+interface TraceablePrototype {
+  callApi: LooseCallApi;
+  [TRACED]?: boolean;
+}
+
 /**
  * Logs every Telegram API call, and what came back.
  *
- * Installed by wrapping `callApi`, which every method on the client funnels
- * through — `sendMessage`, `answerCbQuery`, `sendChatAction`, `setWebhook` — so
- * one hook covers the whole surface without a line at any call site. `chatId` is
- * on the line because it is the field that ties an outgoing call back to the
- * update that caused it.
+ * Patches the **prototype**, not the instance it is handed, and that distinction
+ * is the whole point. `Telegraf.handleUpdate` builds a fresh client for every
+ * update — `const tg = new Telegram(this.token, this.telegram.options, …)` — and
+ * gives *that* to the `Context`, so `ctx.telegram !== bot.telegram`. Wrapping the
+ * instance logs only what the bot sends outside a handler (`getMe`, the webhook
+ * calls, a notifier's messages) and silently drops every `sendMessage`,
+ * `sendChatAction` and `answerCbQuery` a handler makes. The log then reads
+ * "update received" followed by nothing, which is indistinguishable from a
+ * handler that hung — the worst possible failure for a tracing feature.
  *
  * `getUpdates` is the exception: it is the long-poll heartbeat, one call per
  * second for the life of the process, and a line per call would bury the traffic
  * that matters. Its failures are still logged — only the success line is skipped.
  */
 export function logApiCalls(telegram: TelegramClient): void {
-  const original = telegram.callApi.bind(telegram) as LooseCallApi;
+  const prototype = Object.getPrototypeOf(telegram) as TraceablePrototype;
 
-  telegram.callApi = (async (method: string, payload: Record<string, unknown>, options?: { signal?: AbortSignal }) => {
+  if (prototype[TRACED] === true) {
+    return;
+  }
+
+  const original = prototype.callApi;
+  prototype[TRACED] = true;
+
+  prototype.callApi = async function tracedCallApi(
+    this: unknown,
+    method: string,
+    payload: Record<string, unknown>,
+    options?: { signal?: AbortSignal },
+  ): Promise<unknown> {
     const startedAt = Date.now();
 
     try {
-      const result = await original(method, payload, options);
+      const result = await original.call(this, method, payload, options);
 
       if (method !== 'getUpdates') {
         log.debug({ method, ...chatOf(payload), durationMs: Date.now() - startedAt, result: summarize(result) }, 'telegram call');
@@ -44,7 +69,7 @@ export function logApiCalls(telegram: TelegramClient): void {
       log.warn({ err: error, method, ...chatOf(payload), durationMs: Date.now() - startedAt }, 'telegram call failed');
       throw error;
     }
-  }) as TelegramClient['callApi'];
+  };
 }
 
 /**

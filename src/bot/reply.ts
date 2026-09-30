@@ -82,6 +82,38 @@ async function answerCallback(ctx: Context): Promise<void> {
 }
 
 /**
+ * Reports a failure the way every entry point must: log it, then answer the user.
+ *
+ * Extracted from `handler()` so a middleware that cannot use `handler()` can
+ * still translate its errors. The message wizard is the one that matters: it has
+ * to fall through to the next handler when no flow is active, so it cannot be
+ * terminal, and its failures used to reach `bot.catch` instead — which logged
+ * them as `unhandled bot error` and sent the generic «مشکل غیرمنتظره» while the
+ * specific sentence, the one that says Samad is unreachable, sat unused in
+ * `toAppError`.
+ */
+export async function reportFailure(name: string, ctx: Context, error: unknown): Promise<void> {
+  const appError = toAppError(error);
+
+  const context = {
+    handler: name,
+    code: appError.code,
+    telegramId: ctx.from?.id,
+    err: error,
+    ...appError.context,
+  };
+
+  // Expected outcomes — a wrong password, an empty pool — are not incidents.
+  if (isAppError(error) && error.code !== 'INTERNAL') {
+    log.info({ ...context, err: undefined }, 'handler reported a handled failure');
+  } else {
+    log.error(context, 'handler failed');
+  }
+
+  await tryReplyHtml(ctx, appError.userMessage);
+}
+
+/**
  * Wraps a handler with logging, error translation and callback acknowledgement.
  *
  * Every failure reaches the user as a Persian sentence rather than as silence.
@@ -96,24 +128,7 @@ export function handler(name: string, fn: (ctx: Context) => Promise<void>): Midd
     try {
       await fn(ctx);
     } catch (error) {
-      const appError = toAppError(error);
-
-      const context = {
-        handler: name,
-        code: appError.code,
-        telegramId: ctx.from?.id,
-        err: error,
-        ...appError.context,
-      };
-
-      // Expected outcomes — a wrong password, an empty pool — are not incidents.
-      if (isAppError(error) && error.code !== 'INTERNAL') {
-        log.info({ ...context, err: undefined }, 'handler reported a handled failure');
-      } else {
-        log.error(context, 'handler failed');
-      }
-
-      await tryReplyHtml(ctx, appError.userMessage);
+      await reportFailure(name, ctx, error);
     } finally {
       await answerCallback(ctx);
     }
