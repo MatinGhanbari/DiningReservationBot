@@ -19,6 +19,12 @@ export interface HealthReport {
 export interface WebhookRoute {
   /** The exact path the deliveries arrive on. */
   path: string;
+  /**
+   * Answers one delivery, and owns the response while it does.
+   *
+   * Nothing else writes to it, so a route that returns without answering leaves
+   * the request open until the platform gives up on it.
+   */
   handler: (request: IncomingMessage, response: ServerResponse) => Promise<void>;
 }
 
@@ -131,12 +137,6 @@ export class HealthServer {
         this.respond(response, 405, { status: 'error', message: 'method not allowed' });
         return;
       }
-
-      // The match above ignores the query string, but Telegraf's own filter
-      // compares `req.url` against the route exactly, so a query the proxy
-      // appended would be rejected as a 403 by the layer this one just accepted
-      // it for. Hand it the URL it is expecting to see.
-      request.url = webhook.path;
 
       await webhook.handler(request, response);
       return;

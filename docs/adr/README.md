@@ -17,6 +17,7 @@ Format: **Status**, **Date**, **Context**, **Decision**, **Consequences**
 | [0005](0005-single-container-deployment.md) | Single-container deployment | Accepted |
 | [0006](0006-aes-gcm-for-stored-passwords.md) | AES-256-GCM for stored passwords | Accepted |
 | [0007](0007-centralized-persian-copy.md) | Centralised Persian copy | Accepted |
+| [0008](0008-acknowledge-before-processing.md) | Acknowledge webhook deliveries before processing them | Accepted |
 
 ## Adding a record
 

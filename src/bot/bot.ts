@@ -1,5 +1,4 @@
 import { Telegraf, type Context } from 'telegraf';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config, isProduction, webhookPath, webhookUrl } from '../config/env';
 import { copy } from '../copy/fa';
 import { scopedLogger } from '../shared/logger';
@@ -27,8 +26,9 @@ import {
 } from './handlers/reservation.handler';
 import { createTextWizard, handleUniversitySelection, registerStartHandlers } from './handlers/start.handler';
 import { createAdminReplyInterceptor, registerSupportHandlers } from './handlers/support.handler';
-import { handler, replyHtml } from './reply';
+import { handler, replyHtml, timed } from './reply';
 import type { BotServices } from './services';
+import { createWebhookReceiver, type WebhookReceiver } from './webhook';
 import { logApiCalls, logUpdate } from './telemetry';
 
 const log = scopedLogger('bot');
@@ -57,10 +57,11 @@ export class TelegramBot {
   /**
    * The route the HTTP server has to forward, or null when the bot long-polls.
    *
-   * Built once here rather than per request: `webhookCallback` closes over the
-   * path and the secret token, and it is the same handler for every delivery.
+   * Built once here rather than per request: the receiver is the same handler
+   * for every delivery, and it is the thing that owns the acknowledgement — see
+   * `./webhook` for why the update is answered before it is processed.
    */
-  readonly webhook: { path: string; handler: (request: IncomingMessage, response: ServerResponse) => Promise<void> } | null;
+  readonly webhook: WebhookReceiver | null;
 
   /**
    * Takes an existing Telegraf instance rather than a token.
@@ -81,12 +82,7 @@ export class TelegramBot {
     logApiCalls(bot.telegram);
 
     this.webhook =
-      webhookPath === null
-        ? null
-        : {
-            path: webhookPath,
-            handler: bot.webhookCallback(webhookPath, { secretToken: config.TELEGRAM_WEBHOOK_SECRET }),
-          };
+      webhookPath === null ? null : createWebhookReceiver(bot, { path: webhookPath, secretToken: config.TELEGRAM_WEBHOOK_SECRET });
 
     this.registerMiddleware();
     this.registerErrorHandler();
@@ -102,10 +98,10 @@ export class TelegramBot {
     registerStartHandlers(bot, services);
 
     // 2 — an admin's answer to a support message.
-    bot.on('message', createAdminReplyInterceptor(services));
+    bot.on('message', timed('admin-reply', createAdminReplyInterceptor(services)));
 
     // 3 — the wizard, before any button handler can claim its message.
-    bot.on('message', createTextWizard(services));
+    bot.on('message', timed('wizard', createTextWizard(services)));
 
     // 4 — menu buttons.
     registerReservationHandlers(bot, services);

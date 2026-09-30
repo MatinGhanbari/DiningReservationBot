@@ -32,9 +32,20 @@ import { Scheduler, type ScheduledJob } from './scheduler/scheduler';
 import { SystemClock } from './shared/clock';
 import { scopedLogger } from './shared/logger';
 import { formatJalaliDateTime } from './shared/persian';
+import { SECOND } from './shared/time';
 import { OpenRouterAssistant } from './support/openrouter.client';
 
 const log = scopedLogger('container');
+
+/**
+ * How long a shutdown waits for the updates that are already being processed.
+ *
+ * Bounded rather than open-ended because the process has a deadline of its own:
+ * `main.ts` exits after eight seconds and Docker sends SIGKILL after ten. What
+ * is left when the deadline passes is logged by the receiver, and the database
+ * is closed either way.
+ */
+const UPDATE_DRAIN_MS = 3 * SECOND;
 
 export interface Container {
   db: SqliteDatabase;
@@ -252,6 +263,14 @@ export function createContainer(): Container {
     scheduler.stop();
 
     await Promise.allSettled([bot.stop(reason), health.stop()]);
+
+    // Updates are acknowledged before they are processed, so nothing else is
+    // holding them open: the connection that delivered them is already closed,
+    // and without this the database would be shut under work that is still
+    // running. The deadline is short because the process is not the only thing
+    // on a clock — `main.ts` gives up at eight seconds and Docker sends SIGKILL
+    // at ten.
+    await bot.webhook?.drain(UPDATE_DRAIN_MS);
 
     closeDatabase(db);
 

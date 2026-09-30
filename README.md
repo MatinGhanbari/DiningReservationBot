@@ -230,6 +230,21 @@ receives Telegram's requests, so only one port is needed. Telegram accepts only
 ports `443`, `80`, `88` and `8443`. The webhook path is the path of the URL, so
 `https://bot.example.com/telegram/webhook` is answered on `/telegram/webhook`.
 
+Deliveries are **acknowledged before they are processed**. The body is read, the
+secret is checked, and `200` goes back immediately; the update is then handled in
+the background, so Telegram never waits for a handler and a handler that runs
+past Telegraf's 90-second budget can no longer make the platform time out or
+retry. The reasoning, and what it costs, is in
+[ADR 0008](docs/adr/0008-acknowledge-before-processing.md).
+
+The cost is that `200` means "accepted", not "processed": Telegram does not
+redeliver an update whose handling failed, so the log is the only record of it.
+Every update is traced — arrival, each API call and its response, at
+`LOG_LEVEL=debug` — and the lines that matter at the default level are the
+failures: `update could not be processed`, `unhandled bot error` (with the update
+id, its type and the chat), and `middleware is slower than expected`, which names
+the middleware behind a timeout.
+
 That holds while the proxy forwards the path unchanged. A gateway that **strips a
 prefix** — one that answers `https://host/api/<id>/…` by forwarding `…` — hands
 the bot `/` instead, and the delivery lands on a route nothing serves. The
@@ -263,6 +278,11 @@ TELEGRAM_WEBHOOK_SECRET=<openssl rand -hex 32>
 > `/health` and `/ready` too — check `GET <prefix>/ready` from the public
 > internet, and if it answers, the service is reporting its user count to
 > anyone who asks.
+>
+> If a platform never sends that header, every delivery is refused with `403`
+> and the log says `rejected a delivery whose secret token did not match` with
+> `presented: false` — that is the signal to leave `TELEGRAM_WEBHOOK_SECRET`
+> empty rather than to hunt for a proxy bug.
 
 ---
 

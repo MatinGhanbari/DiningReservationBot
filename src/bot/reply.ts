@@ -8,6 +8,16 @@ import { sendTyping } from './typing';
 const log = scopedLogger('bot');
 
 /**
+ * How long a middleware may run before it is worth a warning.
+ *
+ * The slowest legitimate path in the bot is a chatbot answer that had to be
+ * retried: two 30-second model calls. Anything past this is either an upstream
+ * failing slowly or a bug, and both are worth a line naming the middleware
+ * before Telegraf's 90-second deadline turns them into a mystery.
+ */
+const SLOW_MIDDLEWARE_MS = 30_000;
+
+/**
  * Sends a message using Telegram's HTML parse mode.
  *
  * HTML rather than MarkdownV2 on purpose. MarkdownV2 requires escaping eighteen
@@ -66,6 +76,8 @@ async function answerCallback(ctx: Context): Promise<void> {
  */
 export function handler(name: string, fn: (ctx: Context) => Promise<void>): MiddlewareFn<Context> {
   return async (ctx, next) => {
+    const startedAt = Date.now();
+
     try {
       await fn(ctx);
     } catch (error) {
@@ -91,9 +103,60 @@ export function handler(name: string, fn: (ctx: Context) => Promise<void>): Midd
       await answerCallback(ctx);
     }
 
+    reportSlow(name, startedAt, ctx);
+
     // `next` is accepted for signature compatibility with Telegraf middleware.
     void next;
   };
+}
+
+/**
+ * Times a pass-through middleware and reports it when it is slow.
+ *
+ * The two middlewares that run before any handler — the admin reply interceptor
+ * and the message wizard — call `next()` instead of ending the chain, so they
+ * cannot go through `handler()`. They are the ones that hold a Samad call and a
+ * notifier round-trip respectively, which makes them exactly the ones worth
+ * naming when an update takes too long.
+ */
+export function timed(name: string, middleware: MiddlewareFn<Context>): MiddlewareFn<Context> {
+  return async (ctx, next) => {
+    const startedAt = Date.now();
+
+    try {
+      await middleware(ctx, next);
+    } finally {
+      reportSlow(name, startedAt, ctx);
+    }
+  };
+}
+
+/**
+ * Names a middleware that ran for too long.
+ *
+ * Telegraf raises its handler timeout from outside the middleware chain, so the
+ * chain never learns that it was killed: the update carries on running, and by
+ * the time this line is written the user has already been sent the generic
+ * failure. It is still the only line that says *which* middleware was behind it,
+ * and it arrives for the very updates that were killed.
+ */
+function reportSlow(name: string, startedAt: number, ctx: Context): void {
+  const durationMs = Date.now() - startedAt;
+
+  if (durationMs < SLOW_MIDDLEWARE_MS) {
+    return;
+  }
+
+  log.warn(
+    {
+      middleware: name,
+      durationMs,
+      telegramId: ctx.from?.id,
+      updateId: ctx.update.update_id,
+      updateType: ctx.updateType,
+    },
+    'middleware is slower than expected',
+  );
 }
 
 /**
